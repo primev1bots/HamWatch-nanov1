@@ -1522,8 +1522,8 @@ const HomeTab: React.FC = () => {
     const script = document.createElement('script')
     script.src = '//libtl.com/sdk.js'
     script.async = true
-    script.setAttribute('data-zone', '9878570')
-    script.setAttribute('data-sdk', 'show_9878570')
+    script.setAttribute('data-zone', '10160965)
+    script.setAttribute('data-sdk', 'show_10160965')
     
     script.onload = () => {
       console.log('libtl SDK loaded successfully')
