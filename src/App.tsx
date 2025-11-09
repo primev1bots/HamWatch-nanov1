@@ -1522,8 +1522,8 @@ const HomeTab: React.FC = () => {
     const script = document.createElement('script')
     script.src = '//libtl.com/sdk.js'
     script.async = true
-    script.setAttribute('data-zone', '9878570')
-    script.setAttribute('data-sdk', 'show_9878570')
+    script.setAttribute('data-zone', '10160965')
+    script.setAttribute('data-sdk', 'show_10160965')
     
     script.onload = () => {
       console.log('libtl SDK loaded successfully')
@@ -1549,7 +1549,7 @@ const HomeTab: React.FC = () => {
   const showRewardedAd = async (): Promise<boolean> => {
     return new Promise((resolve) => {
       try {
-        const showAdFunction = (window as any).show_9878570
+        const showAdFunction = (window as any).show_10160965
         if (typeof showAdFunction === 'function') {
           // libtl SDK function - we assume it returns a promise or uses callbacks
           const result = showAdFunction()
