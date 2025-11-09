@@ -1516,26 +1516,23 @@ const HomeTab: React.FC = () => {
   // libtl.com rewarded ad setup
   const [showingAd, setShowingAd] = useState(false)
   const [libtlLoaded, setLibtlLoaded] = useState(false)
-  const [libtlError, setLibtlError] = useState(false)
 
   useEffect(() => {
     // Inject the libtl SDK once
     const script = document.createElement('script')
     script.src = '//libtl.com/sdk.js'
     script.async = true
-    script.setAttribute('data-zone', '10160965')
-    script.setAttribute('data-sdk', 'show_10160965')
+    script.setAttribute('data-zone', '9878570')
+    script.setAttribute('data-sdk', 'show_9878570')
     
     script.onload = () => {
       console.log('libtl SDK loaded successfully')
       setLibtlLoaded(true)
-      setLibtlError(false)
     }
     
     script.onerror = () => {
       console.error('Failed to load libtl SDK')
       setLibtlLoaded(false)
-      setLibtlError(true)
     }
     
     document.body.appendChild(script)
@@ -1564,33 +1561,36 @@ const HomeTab: React.FC = () => {
                 console.log('libtl ad completed successfully')
                 resolve(true)
               })
-              .catch((error: any) => {
-                console.log('libtl ad failed or was skipped:', error)
+              .catch(() => {
+                console.log('libtl ad failed or was skipped')
                 resolve(false)
               })
           } else {
-            // If no promise returned, assume it uses callbacks or other mechanism
-            // For safety, we'll treat this as unsuccessful
-            console.warn('libtl ad function did not return a promise')
-            resolve(false)
+            // If no promise returned, assume success after a reasonable timeout
+            console.log('libtl ad started (no promise returned)')
+            setTimeout(() => {
+              resolve(true)
+            }, 30000) // 30 second timeout as fallback
           }
         } else {
           console.warn('libtl show function not available')
-          resolve(false)
+          // If function not available, proceed anyway to not block users
+          resolve(true)
         }
       } catch (error) {
         console.error('Error showing libtl ad:', error)
-        resolve(false)
+        // Don't block user flow if ad fails
+        resolve(true)
       }
     })
   }
 
-  // Enhanced claim handler with strict ad requirement
+  // Enhanced claim handler with libtl ad gate
   const handleClaim = async () => {
     if (!userData) return
 
     try {
-      // If mining not active → start session (no ad required for starting)
+      // If mining not active → start session
       if (!isActive) {
         const started = await startMining()
         if (started) {
@@ -1603,22 +1603,12 @@ const HomeTab: React.FC = () => {
         return
       }
 
-      // If claimable → require rewarded ad before claiming
+      // If claimable → show rewarded ad first, then claim
       if (canClaim) {
-        // Check if libtl SDK is loaded and ready
-        if (!libtlLoaded || libtlError) {
-          window?.Telegram?.WebApp?.showPopup?.({
-            title: 'Ad Not Ready',
-            message: 'Ads provider is not available. Please try again later.',
-            buttons: [{ type: 'ok' }],
-          })
-          return
-        }
-
         setShowingAd(true)
         
         try {
-          // Show libtl rewarded ad - user MUST watch ad to claim
+          // Show libtl rewarded ad
           const adCompleted = await showRewardedAd()
           
           if (adCompleted) {
@@ -1649,17 +1639,17 @@ const HomeTab: React.FC = () => {
               })
             }
           } else {
-            // Ad was not completed - user doesn't get reward
+            // Ad was not completed
             window?.Telegram?.WebApp?.showPopup?.({
-              title: 'Ad Required',
-              message: 'You must watch the ad completely to claim your reward. Please try again.',
+              title: 'Ad Not Completed',
+              message: 'Please watch the ad completely to claim your reward.',
               buttons: [{ type: 'ok' }],
             })
           }
         } catch (error) {
           console.error('Error in ad viewing process:', error)
           window?.Telegram?.WebApp?.showPopup?.({
-            title: 'Ad Error',
+            title: 'Error',
             message: 'Something went wrong with the ad. Please try again.',
             buttons: [{ type: 'ok' }],
           })
@@ -1687,25 +1677,6 @@ const HomeTab: React.FC = () => {
       })
       setShowingAd(false)
     }
-  }
-
-  // Determine if claim button should be disabled
-  const isClaimDisabled = () => {
-    if (!isActive) return false // Start mining is always allowed
-    if (showingAd) return true
-    if (!canClaim) return true // Mining in progress
-    if (!libtlLoaded || libtlError) return true // Ads not available
-    return false
-  }
-
-  // Get button text based on state
-  const getButtonText = () => {
-    if (!isActive) return 'Start Mining'
-    if (showingAd) return 'Showing Ad...'
-    if (!libtlLoaded) return 'Loading Ads...'
-    if (libtlError) return 'Ads Unavailable'
-    if (canClaim) return `Claim ${walletConfig.currencySymbol}${currentAmount.toFixed(2)}`
-    return 'Mining...'
   }
 
   return (
@@ -1759,26 +1730,27 @@ const HomeTab: React.FC = () => {
         <div className="flex gap-4 mt-6">
           <button
             className={`w-[250px] py-2 rounded-lg font-semibold shadow-md transition ${
-              !isClaimDisabled()
+              (!isActive || canClaim) && !showingAd
                 ? 'bg-white text-black hover:bg-gray-200'
                 : 'bg-gray-600 text-gray-300 cursor-not-allowed'
             }`}
             onClick={handleClaim}
-            disabled={isClaimDisabled()}
+            disabled={(isActive && !canClaim) || showingAd}
           >
-            {getButtonText()}
+            {!isActive
+              ? 'Start Mining'
+              : canClaim
+              ? (showingAd
+                  ? 'Showing Ad...'
+                  : `Claim ${walletConfig.currencySymbol}${currentAmount.toFixed(2)}`)
+              : 'Mining...'}
           </button>
         </div>
 
         {/* libtl SDK status indicator */}
-        {!libtlLoaded && !libtlError && (
+        {!libtlLoaded && (
           <div className="mt-4 text-xs text-yellow-400">
             Loading ads provider... Please wait
-          </div>
-        )}
-        {libtlError && (
-          <div className="mt-4 text-xs text-red-400">
-            Ads provider unavailable. Claims are disabled.
           </div>
         )}
       </div>
