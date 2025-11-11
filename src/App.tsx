@@ -1773,10 +1773,10 @@ const HomeTab: React.FC = () => {
   )
 }
 
-// Enhanced Daily Tasks Component from 2nd code
+// Enhanced Daily Tasks Component with Fixed Task Completion
 interface DailyTasksProps {
   userData?: UserData | null;
-  onCompleteTask: (taskId: string) => Promise<boolean>;
+  onCompleteTask: (taskId: string, reward: number) => Promise<boolean>;
   onBack: () => void;
 }
 
@@ -1804,6 +1804,7 @@ const DailyTasks: React.FC<DailyTasksProps> = ({
   const [taskErrors, setTaskErrors] = useState<Record<string, string>>({});
   const [serverStatus, setServerStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const [connectionId, setConnectionId] = useState<string>('');
+  const { walletConfig } = useWalletConfig();
 
   useEffect(() => {
     registerFrontendConnection();
@@ -2002,6 +2003,43 @@ const DailyTasks: React.FC<DailyTasksProps> = ({
     }
   };
 
+  // FIXED: Enhanced task completion handler
+  const handleCompleteTaskInternal = async (taskId: string): Promise<boolean> => {
+    if (!userData) {
+      console.error('User data not available');
+      return false;
+    }
+
+    try {
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) {
+        console.error('Task not found:', taskId);
+        return false;
+      }
+
+      // Check if task is already completed
+      const currentCompletion = userData.tasksCompleted?.[taskId];
+      if (currentCompletion) {
+        console.log('Task already completed');
+        return false;
+      }
+
+      // Call the parent completion handler with reward
+      const success = await onCompleteTask(taskId, task.reward);
+      
+      if (success) {
+        console.log('Task completed successfully:', taskId);
+        return true;
+      } else {
+        console.error('Failed to complete task in parent handler');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error in handleCompleteTaskInternal:', error);
+      return false;
+    }
+  };
+
   const handleStartTask = async (task: Task) => {
     if (!userData) {
       alert("Please log in to start tasks");
@@ -2028,15 +2066,23 @@ const DailyTasks: React.FC<DailyTasksProps> = ({
       if (task.category === "TG Tasks" && task.telegramChannel) {
         const telegramUrl = task.inviteLink || `https://t.me/${task.telegramChannel}`;
         window.open(telegramUrl, "_blank", "noopener,noreferrer");
-        alert(`Join the channel: ${task.telegramChannel}\n\n1. Click the link to join\n2. Wait a few seconds after joining\n3. Come back and click "Verify & Claim"`);
+        
+        // Show better instructions
+        window.Telegram?.WebApp?.showPopup?.({
+          title: 'Join Channel',
+          message: `1. Join the channel: ${task.telegramChannel}\n2. Wait a few seconds after joining\n3. Return here and click "Verify & Claim"`,
+          buttons: [{ type: 'ok' }]
+        });
       } else if (task.url) {
         window.open(task.url, "_blank", "noopener,noreferrer");
       } else {
+        // For tasks without URLs, complete immediately
         setTimeout(() => {
           handleClaimTask(task);
         }, 1000);
       }
     } catch (error) {
+      console.error('Error starting task:', error);
       setTaskErrors(prev => ({
         ...prev,
         [task.id]: "Error starting task"
@@ -2046,23 +2092,34 @@ const DailyTasks: React.FC<DailyTasksProps> = ({
     }
   };
 
+  // FIXED: Enhanced claim task handler
   const handleClaimTask = async (task: Task): Promise<void> => {
-    if (!userData) return;
+    if (!userData) {
+      alert("User data not available");
+      return;
+    }
 
     setClaimingTask(task.id);
     setTaskErrors(prev => ({ ...prev, [task.id]: '' }));
 
     try {
-      if (task.category === "TG Tasks" && task.telegramChannel && task.checkMembership) {
-        const isMember = await checkTelegramMembership(task.id);
+      let verificationPassed = true;
 
-        if (!isMember) {
+      // For TG Tasks, verify membership first
+      if (task.category === "TG Tasks" && task.telegramChannel && task.checkMembership) {
+        verificationPassed = await checkTelegramMembership(task.id);
+        
+        if (!verificationPassed) {
+          const errorMsg = "We couldn't verify that you joined the channel. Please make sure you joined and try again.";
           setTaskErrors(prev => ({
             ...prev,
-            [task.id]: "We couldn't verify that you joined the channel"
+            [task.id]: errorMsg
           }));
-          setPendingTask(null);
-          setClaimingTask(null);
+          window.Telegram?.WebApp?.showPopup?.({
+            title: 'Verification Failed',
+            message: errorMsg,
+            buttons: [{ type: 'ok' }]
+          });
           return;
         }
       }
@@ -2072,38 +2129,76 @@ const DailyTasks: React.FC<DailyTasksProps> = ({
       const completedUsers = task.completedUsers || 0;
 
       if (usersQuantity > 0 && completedUsers >= usersQuantity) {
+        const errorMsg = "This task is no longer available (user limit reached)";
         setTaskErrors(prev => ({
           ...prev,
-          [task.id]: "This task is no longer available"
+          [task.id]: errorMsg
         }));
-        setPendingTask(null);
-        setClaimingTask(null);
+        window.Telegram?.WebApp?.showPopup?.({
+          title: 'Task Unavailable',
+          message: errorMsg,
+          buttons: [{ type: 'ok' }]
+        });
         return;
       }
 
       // Increment completed users count
-      const userIncremented = await incrementCompletedUsers(task.id);
-
-      if (!userIncremented) {
-        setTaskErrors(prev => ({
-          ...prev,
-          [task.id]: "This task is no longer available"
-        }));
-        setPendingTask(null);
-        setClaimingTask(null);
-        return;
+      if (usersQuantity > 0) {
+        const userIncremented = await incrementCompletedUsers(task.id);
+        if (!userIncremented) {
+          const errorMsg = "This task is no longer available";
+          setTaskErrors(prev => ({
+            ...prev,
+            [task.id]: errorMsg
+          }));
+          window.Telegram?.WebApp?.showPopup?.({
+            title: 'Task Unavailable',
+            message: errorMsg,
+            buttons: [{ type: 'ok' }]
+          });
+          return;
+        }
       }
 
-      const success = await onCompleteTask(task.id);
+      // Complete the task
+      const success = await handleCompleteTaskInternal(task.id);
 
       if (success) {
         setPendingTask(null);
-        alert(`🎉 Task completed! You earned $${task.reward.toFixed(2)}`);
+        
+        // Show success message
+        window.Telegram?.WebApp?.showPopup?.({
+          title: 'Task Completed! 🎉',
+          message: `You earned ${walletConfig.currencySymbol}${task.reward.toFixed(2)}`,
+          buttons: [{ type: 'ok' }]
+        });
+        
+        // Clear any previous errors
+        setTaskErrors(prev => ({ ...prev, [task.id]: '' }));
       } else {
-        alert("Failed to complete task");
+        const errorMsg = "Failed to complete task. Please try again.";
+        setTaskErrors(prev => ({
+          ...prev,
+          [task.id]: errorMsg
+        }));
+        window.Telegram?.WebApp?.showPopup?.({
+          title: 'Error',
+          message: errorMsg,
+          buttons: [{ type: 'ok' }]
+        });
       }
     } catch (error) {
-      alert("Error completing task");
+      console.error('Error claiming task:', error);
+      const errorMsg = "An error occurred while completing the task";
+      setTaskErrors(prev => ({
+        ...prev,
+        [task.id]: errorMsg
+      }));
+      window.Telegram?.WebApp?.showPopup?.({
+        title: 'Error',
+        message: errorMsg,
+        buttons: [{ type: 'ok' }]
+      });
     } finally {
       setClaimingTask(null);
     }
@@ -2116,9 +2211,9 @@ const DailyTasks: React.FC<DailyTasksProps> = ({
 
   const getTaskIcon = (category: string) => {
     if (category === "TG Tasks") {
-      return <FaTelegram className="w-5 h-5 text-white-400" />;
+      return <FaTelegram className="w-5 h-5 text-white" />;
     }
-    return <FaTasks className="w-5 h-5 text-white-400" />;
+    return <FaTasks className="w-5 h-5 text-white" />;
   };
 
   const getServerStatusIcon = () => {
@@ -3360,62 +3455,71 @@ const VPNGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <>{children}</>;
 };
 
-// Updated Earn Tab Component to handle VPN states properly
+// Updated EarnTab Component with Fixed Task Completion
 const EarnTab = () => {
   const [activeTab, setActiveTab] = useState<'ads' | 'daily-tasks'>('ads')
   const [showHistory, setShowHistory] = useState(false)
   const { userData, updateUser, addTransaction } = useUserData()
+  useWalletConfig()
 
-  const handleCompleteTask = async (taskId: string): Promise<boolean> => {
-    if (!userData) return false
-
-    const tasksRef = ref(db, 'tasks')
-    const snapshot = await get(tasksRef)
-    if (!snapshot.exists()) return false
-
-    const tasksData = snapshot.val()
-    const task = Object.values(tasksData).find((t: any) => t.id === taskId) as Task
-    if (!task) return false
-
-    const today = new Date().toISOString().split('T')[0];
-    const todayStats = userData.stats?.[today] || { ads: 0, earned: 0 };
-
-    const newBalance = userData.balance + task.reward
-    const newTotalEarned = userData.totalEarned + task.reward
-    
-    const newTasksCompleted = {
-      ...userData.tasksCompleted,
-      [taskId]: {
-        completedAt: new Date().toISOString(),
-        reward: task.reward
-      }
+  // FIXED: Enhanced task completion handler
+  const handleCompleteTask = async (taskId: string, reward: number): Promise<boolean> => {
+    if (!userData) {
+      console.error('User data not available for task completion');
+      return false;
     }
 
-    const newStats = {
-      ...userData.stats,
-      [today]: {
-        ads: todayStats.ads,
-        earned: todayStats.earned + task.reward
-      }
+    try {
+      console.log('Completing task:', taskId, 'Reward:', reward);
+
+      const today = new Date().toISOString().split('T')[0];
+      const todayStats = userData.stats?.[today] || { ads: 0, earned: 0 };
+
+      const newBalance = userData.balance + reward;
+      const newTotalEarned = userData.totalEarned + reward;
+      
+      // Update tasks completed - FIXED: Store completion data properly
+      const newTasksCompleted = {
+        ...userData.tasksCompleted,
+        [taskId]: {
+          completedAt: new Date().toISOString(),
+          reward: reward
+        }
+      };
+
+      const newStats = {
+        ...userData.stats,
+        [today]: {
+          ads: todayStats.ads,
+          earned: todayStats.earned + reward
+        }
+      };
+
+      // Update user data
+      await updateUser({
+        balance: newBalance,
+        totalEarned: newTotalEarned,
+        tasksCompleted: newTasksCompleted,
+        stats: newStats
+      });
+
+      // Add transaction record
+      await addTransaction({
+        userId: userData.telegramId,
+        type: 'task_reward',
+        amount: reward,
+        description: `Task completed`,
+        timestamp: Date.now(),
+        status: 'completed'
+      });
+
+      console.log('Task completed successfully');
+      return true;
+
+    } catch (error) {
+      console.error('Error completing task:', error);
+      return false;
     }
-
-    await updateUser({
-      balance: newBalance,
-      totalEarned: newTotalEarned,
-      tasksCompleted: newTasksCompleted,
-      stats: newStats
-    })
-
-    await addTransaction({
-      userId: userData.telegramId,
-      type: 'task_reward',
-      amount: task.reward,
-      description: `Task completed: ${task.name}`,
-      timestamp: Date.now(),
-      status: 'completed'
-    })
-
-    return true
   }
 
   // Render content based on active tab with VPN protection
