@@ -23,7 +23,6 @@ const firebaseConfig = {
   appId: "1:868246294583:web:70da61aadda9b1ed4defb2",
   measurementId: "G-20Z4Q1H7D9"
 };
-
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
@@ -1774,6 +1773,7 @@ const HomeTab: React.FC = () => {
   )
 }
 
+// Enhanced Daily Tasks Component from 2nd code
 interface DailyTasksProps {
   userData?: UserData | null;
   onCompleteTask: (taskId: string) => Promise<boolean>;
@@ -1810,8 +1810,7 @@ const DailyTasks: React.FC<DailyTasksProps> = ({
   }, [userData]);
 
   useEffect(() => {
-    const database = getDatabase();
-    const tasksRef = ref(database, 'tasks');
+    const tasksRef = ref(db, 'tasks');
 
     const unsubscribe = onValue(tasksRef, (snapshot) => {
       if (snapshot.exists()) {
@@ -1978,8 +1977,7 @@ const DailyTasks: React.FC<DailyTasksProps> = ({
   };
 
   const incrementCompletedUsers = async (taskId: string): Promise<boolean> => {
-    const database = getDatabase();
-    const taskRef = ref(database, `tasks/${taskId}`);
+    const taskRef = ref(db, `tasks/${taskId}`);
 
     try {
       const result = await runTransaction(taskRef, (currentTask: any) => {
@@ -4131,8 +4129,7 @@ const ProfileTab = () => {
                           <path
                             className="opacity-75"
                             fill="currentColor"
-                            d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                          ></path>
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
                       ) : (
                         <>
@@ -4235,7 +4232,7 @@ const ProfileTab = () => {
       )}
     </div>
   );
-}
+};
 
 // Main Page Component
 export default function HomePage() {
