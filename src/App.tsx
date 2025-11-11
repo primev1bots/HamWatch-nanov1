@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, createContext, useContext } from 'react'
-import { Bell, Loader2, Copy, Check, Link2, Users, Coins, Send, Code, ArrowLeft, ArrowRight, CreditCard, X, CheckCircle2, ShieldCheck, History, Shield, Wifi, WifiOff, RefreshCw, Globe } from 'lucide-react'
+import { Bell, Loader2, Copy, Check, Link2, Users, Coins, Send, Code, ArrowLeft, ArrowRight, CreditCard, X, CheckCircle2, ShieldCheck, History, Shield, Wifi, WifiOff, RefreshCw, Globe, Server, Clock } from 'lucide-react'
 import { logo, fan, sparkles } from './images'
 import Wallet from "./icons/Wallet"
 import HomeIcon from './icons/Home'
@@ -7,21 +7,21 @@ import EarnIcon from './icons/Earn'
 import FriendsIcon from './icons/Friends'
 import ProfileIcon from './icons/Profile'
 import { db } from './Firebase'
-import { ref, set, update, onValue, push, query, orderByChild, limitToLast, get } from 'firebase/database'
+import { ref, set, update, onValue, push, query, orderByChild, limitToLast, get, runTransaction } from 'firebase/database'
 import { FaTasks, FaTelegram } from 'react-icons/fa'
 import { initializeApp } from 'firebase/app';
 import { getDatabase } from 'firebase/database';
 
 // Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyBQFKqKGmVpNv4aHQhLfldQ6CouBmtYwYY",
-  authDomain: "watchhamelite-primev1.firebaseapp.com",
-  databaseURL: "https://watchhamelite-primev1-default-rtdb.firebaseio.com",
-  projectId: "watchhamelite-primev1",
-  storageBucket: "watchhamelite-primev1.firebasestorage.app",
-  messagingSenderId: "868246294583",
-  appId: "1:868246294583:web:70da61aadda9b1ed4defb2",
-  measurementId: "G-20Z4Q1H7D9"
+  apiKey: "AIzaSyDA3zFoK2ZXwqZmUBuZYtvfuAfSnCGhTrY",
+  authDomain: "nanov1.firebaseapp.com",
+  databaseURL: "https://nanov1-default-rtdb.firebaseio.com",
+  projectId: "nanov1",
+  storageBucket: "nanov1.firebasestorage.app",
+  messagingSenderId: "254408761797",
+  appId: "1:254408761797:web:059628719c4b3041f2ebac",
+  measurementId: "G-J6GHL1J8ZY"
 };
 
 // Initialize Firebase
@@ -1522,8 +1522,8 @@ const HomeTab: React.FC = () => {
     const script = document.createElement('script')
     script.src = '//libtl.com/sdk.js'
     script.async = true
-    script.setAttribute('data-zone', '10160965')
-    script.setAttribute('data-sdk', 'show_10160965')
+    script.setAttribute('data-zone', '9878570')
+    script.setAttribute('data-sdk', 'show_9878570')
     
     script.onload = () => {
       console.log('libtl SDK loaded successfully')
@@ -1549,7 +1549,7 @@ const HomeTab: React.FC = () => {
   const showRewardedAd = async (): Promise<boolean> => {
     return new Promise((resolve) => {
       try {
-        const showAdFunction = (window as any).show_10160965
+        const showAdFunction = (window as any).show_9878570
         if (typeof showAdFunction === 'function') {
           // libtl SDK function - we assume it returns a promise or uses callbacks
           const result = showAdFunction()
@@ -1774,7 +1774,12 @@ const HomeTab: React.FC = () => {
   )
 }
 
-// Server Configuration for Tasks
+interface DailyTasksProps {
+  userData?: UserData | null;
+  onCompleteTask: (taskId: string) => Promise<boolean>;
+  onBack: () => void;
+}
+
 const SERVER_CONFIG = {
   baseUrl: 'https://31d71452-591a-481f-8388-0bc42d884c2a.e1-us-east-azure.choreoapps.dev',
   endpoints: {
@@ -1783,13 +1788,6 @@ const SERVER_CONFIG = {
     health: '/api/health'
   }
 };
-
-// Daily Tasks Component - Updated Version
-interface DailyTasksProps {
-  userData?: UserData | null;
-  onCompleteTask: (taskId: string) => Promise<boolean>;
-  onBack: () => void;
-}
 
 const DailyTasks: React.FC<DailyTasksProps> = ({
   userData,
@@ -1806,7 +1804,6 @@ const DailyTasks: React.FC<DailyTasksProps> = ({
   const [taskErrors, setTaskErrors] = useState<Record<string, string>>({});
   const [serverStatus, setServerStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const [connectionId, setConnectionId] = useState<string>('');
-  const { walletConfig } = useWalletConfig()
 
   useEffect(() => {
     registerFrontendConnection();
@@ -1962,8 +1959,9 @@ const DailyTasks: React.FC<DailyTasksProps> = ({
       return { canStart: false, reason: "User not logged in" };
     }
 
-    const completed = userData.tasksCompleted?.[task.id] || 0;
-    const isCompleted = completed >= task.totalRequired;
+    const completedTask = userData.tasksCompleted?.[task.id];
+    const completedCount = completedTask ? 1 : 0;
+    const isCompleted = completedCount >= task.totalRequired;
     const usersQuantity = task.usersQuantity || 0;
     const completedUsers = task.completedUsers || 0;
 
@@ -1984,7 +1982,7 @@ const DailyTasks: React.FC<DailyTasksProps> = ({
     const taskRef = ref(database, `tasks/${taskId}`);
 
     try {
-      const result = await runTransaction(taskRef, (currentTask) => {
+      const result = await runTransaction(taskRef, (currentTask: any) => {
         if (!currentTask) return;
 
         const usersQuantity = currentTask.usersQuantity || 0;
@@ -2244,8 +2242,9 @@ const DailyTasks: React.FC<DailyTasksProps> = ({
             </div>
           ) : (
             paginatedTasks.map((task) => {
-              const completed = userData?.tasksCompleted?.[task.id] || 0;
-              const isCompleted = completed >= task.totalRequired;
+              const completedTask = userData?.tasksCompleted?.[task.id];
+              const completedCount = completedTask ? 1 : 0;
+              const isCompleted = completedCount >= task.totalRequired;
               const isPending = pendingTask?.id === task.id;
               const isStarting = startingTask === task.id;
               const isClaiming = claimingTask === task.id;
@@ -2307,7 +2306,7 @@ const DailyTasks: React.FC<DailyTasksProps> = ({
                           {/* User Progress */}
                           <div className="flex items-center justify-between">
                             <span className={`text-xs ${(isTaskDisabled || isTaskLimitReached) ? 'text-gray-500' : 'text-blue-300'}`}>
-                              Your progress: {completed}/{task.totalRequired}
+                              Your progress: {completedCount}/{task.totalRequired}
                             </span>
                             {isCompleted && (
                               <span className="text-green-400 text-xs font-medium bg-green-500/10 px-2 py-1 rounded border border-green-500/20">
@@ -3510,8 +3509,8 @@ const FriendsTab = () => {
   const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user
 
   const referUrl = useMemo(() => {
-    if (typeof window === 'undefined' || !tgUser?.id) return 'https://t.me/HamWatch_Bot?start=default'
-    return `https://t.me/HamWatch_Bot?start=${tgUser.id}`
+    if (typeof window === 'undefined' || !tgUser?.id) return 'https://t.me/nan0v1_bot?start=default'
+    return `https://t.me/nan0v1_bot?start=${tgUser.id}`
   }, [tgUser?.id])
 
   const [copied, setCopied] = useState(false)
@@ -3531,7 +3530,7 @@ const FriendsTab = () => {
     if (typeof window !== 'undefined' && (navigator as any).share) {
       try {
         await (navigator as any).share({
-          title: 'Join me on RevenueEarn',
+          title: 'Join me on NanoV1',
           text: 'Earn money by completing tasks and watching ads!',
           url: referUrl,
         })
@@ -3745,87 +3744,76 @@ function ProfileHeader({ onOpenWallet }: { onOpenWallet: () => void }) {
 
   return (
     <section aria-label="Profile header" className="w-full max-w-3xl">
-  <div className="relative -mt-12 sm:-mt-16 mx-3 sm:mx-6">
-    <div className="relative isolate overflow-hidden rounded-3xl border border-white/10 bg-white/[0.06] backdrop-blur-xl">
-      <div className="pointer-events-none absolute inset-x-0 -top-24 h-40 bg-gradient-to-b from-white/20 to-transparent" />
+      <div className="relative -mt-12 sm:-mt-16 mx-3 sm:mx-6">
+        <div className="relative isolate overflow-hidden rounded-3xl border border-white/10 bg-white/[0.06] backdrop-blur-xl">
+          <div className="pointer-events-none absolute inset-x-0 -top-24 h-40 bg-gradient-to-b from-white/20 to-transparent" />
 
-      <div className="p-4 sm:p-6 lg:p-7">
-        <div className="flex flex-col items-center sm:items-start sm:flex-row gap-4 sm:gap-5">
-          {/* Avatar and Wallet Button */}
-          <div className="flex flex-col xs:flex-row items-center gap-4 sm:gap-6 shrink-0">
-            <div className="relative h-20 w-20 sm:h-24 sm:w-24">
-              <span className="absolute -inset-0.5 rounded-full bg-gradient-to-br from-[#22d3ee] via-[#3b82f6] to-[#a855f7] opacity-70 blur" />
-              <div className="relative h-20 w-20 sm:h-24 sm:w-24 rounded-full overflow-hidden ring-2 ring-white/20 bg-black/40">
-                <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xl sm:text-2xl font-bold">
-                  {tgUser?.first_name?.[0]?.toUpperCase() || 'U'}
+          <div className="p-5 sm:p-7">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-5">
+              <div className="flex items-center gap-24 shrink-0">
+                <div className="relative h-24 w-24">
+                  <span className="absolute -inset-0.5 rounded-full bg-gradient-to-br from-[#22d3ee] via-[#3b82f6] to-[#a855f7] opacity-70 blur" />
+                  <div className="relative h-24 w-24 rounded-full overflow-hidden ring-2 ring-white/20 bg-black/40">
+                    <div className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold">
+                      {tgUser?.first_name?.[0]?.toUpperCase() || 'U'}
+                    </div>
+                  </div>
+                  <span className="absolute -bottom-1 -right-1 rounded-full bg-black/60 ring-1 ring-green-400/20 p-1">
+                    <ShieldCheck className="h-4 w-4 text-green-400" />
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={onOpenWallet}
+                  className="bg-[#007aff] px-4 py-2 rounded-2xl flex items-center gap-2 shadow-md text-white hover:brightness-110 active:scale-[0.98] transition"
+                  aria-label="Open wallet"
+                >
+                  <Wallet className="w-4 h-4" />
+                  <span>Wallet</span>
+                </button>
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">
+                    {user.name}
+                  </h2>
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5 text-[11px] leading-5 text-emerald-200"
+                    aria-label="Verified account"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />
+                    Verified
+                  </span>
+                </div>
+
+                <p className="text-sm text-gray-300 mt-0.5">{user.handle}</p>
+
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-200/90">
+                  <span className="rounded-md bg-black/30 px-2 py-1 border border-white/10">ID: {user.id}</span>
+                  <span className="text-gray-500">•</span>
+                  <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 hover:bg-white/10 active:scale-[0.98] transition">Joined: {user.joined}</span>
                 </div>
               </div>
-              <span className="absolute -bottom-1 -right-1 rounded-full bg-black/60 ring-1 ring-green-400/20 p-1">
-                <ShieldCheck className="h-3 w-3 sm:h-4 sm:w-4 text-green-400" />
-              </span>
             </div>
 
-            <button
-              type="button"
-              onClick={onOpenWallet}
-              className="bg-[#007aff] px-4 py-2 rounded-2xl flex items-center gap-2 shadow-md text-white hover:brightness-110 active:scale-[0.98] transition w-full xs:w-auto justify-center"
-              aria-label="Open wallet"
-            >
-              <Wallet className="w-4 h-4" />
-              <span>Wallet</span>
-            </button>
-          </div>
-
-          {/* User Info */}
-          <div className="min-w-0 flex-1 text-center sm:text-left">
-            <div className="flex flex-col xs:flex-row xs:items-center gap-2 flex-wrap justify-center sm:justify-start">
-              <h2 className="text-lg sm:text-xl lg:text-2xl font-semibold tracking-tight break-words">
-                {user.name}
-              </h2>
-              <span
-                className="inline-flex items-center gap-1 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5 text-[11px] leading-5 text-emerald-200 w-fit mx-auto xs:mx-0"
-                aria-label="Verified account"
-              >
-                <CheckCircle2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-emerald-300" />
-                Verified
-              </span>
-            </div>
-
-            <p className="text-sm text-gray-300 mt-0.5 break-words">{user.handle}</p>
-
-            <div className="mt-2 flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs text-gray-200/90 justify-center sm:justify-start">
-              <span className="rounded-md bg-black/30 px-2 py-1 border border-white/10 break-all">
-                ID: {user.id}
-              </span>
-              <span className="text-gray-500 hidden xs:inline">•</span>
-              <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 hover:bg-white/10 active:scale-[0.98] transition w-fit mx-auto xs:mx-0">
-                Joined: {user.joined}
-              </span>
+            <div className="mt-5 grid grid-cols-3 divide-x divide-white/10 rounded-2xl border border-white/10 bg-black/20 overflow-hidden">
+              {[
+                { label: "Earnings", value: `${walletConfig.currencySymbol}${userData?.totalEarned.toFixed(2) || '0.00'}` },
+                { label: "Friends", value: `${referralData?.referredCount || 0}` },
+                { label: "Withdrawn", value: `${walletConfig.currencySymbol}${userData?.totalWithdrawn.toFixed(2) || '0.00'}` },
+              ].map((s, i) => (
+                <div key={i} className="px-4 py-3 text-center">
+                  <p className="text-[11px] uppercase tracking-wide text-gray-400">{s.label}</p>
+                  <p className="text-base font-semibold">{s.value}</p>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
-
-        {/* Stats Grid */}
-        <div className="mt-4 sm:mt-5 grid grid-cols-3 divide-x divide-white/10 rounded-2xl border border-white/10 bg-black/20 overflow-hidden">
-          {[
-            { label: "Earnings", value: `${walletConfig.currencySymbol}${userData?.totalEarned.toFixed(2) || '0.00'}` },
-            { label: "Friends", value: `${referralData?.referredCount || 0}` },
-            { label: "Withdrawn", value: `${walletConfig.currencySymbol}${userData?.totalWithdrawn.toFixed(2) || '0.00'}` },
-          ].map((s, i) => (
-            <div key={i} className="px-2 sm:px-3 lg:px-4 py-2 sm:py-3 text-center">
-              <p className="text-[10px] xs:text-[11px] uppercase tracking-wide text-gray-400 break-words">
-                {s.label}
-              </p>
-              <p className="text-sm sm:text-base font-semibold break-words">
-                {s.value}
-              </p>
-            </div>
-          ))}
         </div>
       </div>
-    </div>
-  </div>
-</section>
+    </section>
   );
 }
 
