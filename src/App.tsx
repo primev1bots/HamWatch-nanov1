@@ -1776,7 +1776,7 @@ const HomeTab: React.FC = () => {
 
 // Server Configuration for Tasks
 const SERVER_CONFIG = {
-  baseUrl: 'https://31d71452-591a-481f-8388-0bc42d884c2a.e1-us-east-azure.choreoapps.dev',
+  baseUrl: 'https://02799407-44af-4c9e-92c2-dfa14ff84130.e1-us-east-azure.choreoapps.dev',
   endpoints: {
     telegram: '/api/telegram/check-membership',
     connect: '/api/frontend/connect',
@@ -3361,58 +3361,53 @@ const EarnTab = () => {
   const handleCompleteTask = async (taskId: string): Promise<boolean> => {
     if (!userData) return false
 
-    try {
-      const tasksRef = ref(db, 'tasks')
-      const snapshot = await get(tasksRef)
-      if (!snapshot.exists()) return false
+    const tasksRef = ref(db, 'tasks')
+    const snapshot = await get(tasksRef)
+    if (!snapshot.exists()) return false
 
-      const tasksData = snapshot.val()
-      const task = Object.values(tasksData).find((t: any) => t.id === taskId) as Task
-      if (!task) return false
+    const tasksData = snapshot.val()
+    const task = Object.values(tasksData).find((t: any) => t.id === taskId) as Task
+    if (!task) return false
 
-      const today = new Date().toISOString().split('T')[0];
-      const todayStats = userData.stats?.[today] || { ads: 0, earned: 0 };
+    const today = new Date().toISOString().split('T')[0];
+    const todayStats = userData.stats?.[today] || { ads: 0, earned: 0 };
 
-      const newBalance = (userData.balance || 0) + task.reward
-      const newTotalEarned = (userData.totalEarned || 0) + task.reward
-      
-      const newTasksCompleted = {
-        ...(userData.tasksCompleted || {}),
-        [taskId]: {
-          completedAt: new Date().toISOString(),
-          reward: task.reward
-        }
+    const newBalance = userData.balance + task.reward
+    const newTotalEarned = userData.totalEarned + task.reward
+    
+    const newTasksCompleted = {
+      ...userData.tasksCompleted,
+      [taskId]: {
+        completedAt: new Date().toISOString(),
+        reward: task.reward
       }
-
-      const newStats = {
-        ...(userData.stats || {}),
-        [today]: {
-          ads: todayStats.ads,
-          earned: (todayStats.earned || 0) + task.reward
-        }
-      }
-
-      await updateUser({
-        balance: newBalance,
-        totalEarned: newTotalEarned,
-        tasksCompleted: newTasksCompleted,
-        stats: newStats
-      })
-
-      await addTransaction({
-        userId: userData.telegramId,
-        type: 'task_reward',
-        amount: task.reward,
-        description: `Task completed: ${task.name}`,
-        timestamp: Date.now(),
-        status: 'completed'
-      })
-
-      return true
-    } catch (error) {
-      console.error('Error completing task:', error)
-      return false
     }
+
+    const newStats = {
+      ...userData.stats,
+      [today]: {
+        ads: todayStats.ads,
+        earned: todayStats.earned + task.reward
+      }
+    }
+
+    await updateUser({
+      balance: newBalance,
+      totalEarned: newTotalEarned,
+      tasksCompleted: newTasksCompleted,
+      stats: newStats
+    })
+
+    await addTransaction({
+      userId: userData.telegramId,
+      type: 'task_reward',
+      amount: task.reward,
+      description: `Task completed: ${task.name}`,
+      timestamp: Date.now(),
+      status: 'completed'
+    })
+
+    return true
   }
 
   // Render content based on active tab with VPN protection
