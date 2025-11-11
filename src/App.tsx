@@ -14,14 +14,14 @@ import { getDatabase } from 'firebase/database';
 
 // Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyDA3zFoK2ZXwqZmUBuZYtvfuAfSnCGhTrY",
-  authDomain: "nanov1.firebaseapp.com",
-  databaseURL: "https://nanov1-default-rtdb.firebaseio.com",
-  projectId: "nanov1",
-  storageBucket: "nanov1.firebasestorage.app",
-  messagingSenderId: "254408761797",
-  appId: "1:254408761797:web:059628719c4b3041f2ebac",
-  measurementId: "G-J6GHL1J8ZY"
+  apiKey: "AIzaSyBQFKqKGmVpNv4aHQhLfldQ6CouBmtYwYY",
+  authDomain: "watchhamelite-primev1.firebaseapp.com",
+  databaseURL: "https://watchhamelite-primev1-default-rtdb.firebaseio.com",
+  projectId: "watchhamelite-primev1",
+  storageBucket: "watchhamelite-primev1.firebasestorage.app",
+  messagingSenderId: "868246294583",
+  appId: "1:868246294583:web:70da61aadda9b1ed4defb2",
+  measurementId: "G-20Z4Q1H7D9"
 };
 
 // Initialize Firebase
