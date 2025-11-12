@@ -3611,8 +3611,8 @@ const FriendsTab = () => {
   const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user
 
   const referUrl = useMemo(() => {
-    if (typeof window === 'undefined' || !tgUser?.id) return 'https://t.me/nan0v1_bot?start=default'
-    return `https://t.me/nan0v1_bot?start=${tgUser.id}`
+    if (typeof window === 'undefined' || !tgUser?.id) return 'https://t.me/HamWatch_Bot?start=default'
+    return `https://t.me/HamWatch_Bot?start=${tgUser.id}`
   }, [tgUser?.id])
 
   const [copied, setCopied] = useState(false)
