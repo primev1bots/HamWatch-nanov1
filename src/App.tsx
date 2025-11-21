@@ -1142,20 +1142,7 @@ function usePaymentMethods() {
 // App Configuration Hook with mining values and monetag
 // App Configuration Hook with mining values, monetag, and libtl
 function useAppConfig() {
-  const [appConfig, setAppConfig] = useState<AppConfig>({
-    logoUrl: '',
-    appName: '',
-    sliderImages: [],
-    supportUrl: '',
-    tutorialVideoId: '',
-    referralCommissionRate: 10,
-    miningBaseAmount: ,
-    miningMaxAmount: ,
-    miningDuration: ,
-    monetagAppId: '',
-    botUsername: 'use_bot',
-    libtlZoneId: '' // ADD THIS WITH DEFAULT VALUE
-  });
+  const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
