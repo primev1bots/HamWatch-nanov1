@@ -1144,14 +1144,14 @@ function usePaymentMethods() {
 function useAppConfig() {
   const [appConfig, setAppConfig] = useState<AppConfig>({
     logoUrl: '',
-    appName: 'NanoV1',
+    appName: '',
     sliderImages: [],
-    supportUrl: 'https://t.me/nan0v1_support',
-    tutorialVideoId: 'dQw4w9WgXcQ',
+    supportUrl: '',
+    tutorialVideoId: '',
     referralCommissionRate: 10,
-    miningBaseAmount: 0.001,
-    miningMaxAmount: 1.0,
-    miningDuration: 60000,
+    miningBaseAmount: ,
+    miningMaxAmount: ,
+    miningDuration: ,
     monetagAppId: '',
     botUsername: 'use_bot',
     libtlZoneId: '' // ADD THIS WITH DEFAULT VALUE
