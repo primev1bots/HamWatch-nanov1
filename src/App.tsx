@@ -1142,7 +1142,20 @@ function usePaymentMethods() {
 // App Configuration Hook with mining values and monetag
 // App Configuration Hook with mining values, monetag, and libtl
 function useAppConfig() {
-  const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
+  const [appConfig, setAppConfig] = useState<AppConfig>({
+    logoUrl: '',
+    appName: 'NanoV1',
+    sliderImages: [],
+    supportUrl: 'https://t.me/nan0v1_support',
+    tutorialVideoId: 'dQw4w9WgXcQ',
+    referralCommissionRate: 10,
+    miningBaseAmount: 0.00,
+    miningMaxAmount: 0.0,
+    miningDuration: 60000,
+    monetagAppId: '',
+    botUsername: 'use_bot',
+    libtlZoneId: '' // ADD THIS WITH DEFAULT VALUE
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
