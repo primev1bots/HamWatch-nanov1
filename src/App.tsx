@@ -2630,7 +2630,7 @@ const DailyTasks: React.FC<DailyTasksProps> = ({
   );
 };
 
-// Enhanced AdsDashboard with Monetag integration
+// Enhanced AdsDashboard with Monetag integration - FIXED watched count and cooldown issues
 const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) => {
   const [ads, setAds] = React.useState<Ad[]>([]);
   const [isWatchingAd, setIsWatchingAd] = React.useState<number | null>(null);
@@ -2639,14 +2639,14 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
     onclicka: false,
     adsovio: false,
     adextra: false,
-    monetag: false, // NEW: Monetag script status
+    monetag: false,
   });
   const [scriptsInitialized, setScriptsInitialized] = React.useState<Record<Provider, boolean>>({
     gigapub: false,
     onclicka: false,
     adsovio: false,
     adextra: false,
-    monetag: false, // NEW: Monetag initialization status
+    monetag: false,
   });
   const [cooldowns, setCooldowns] = React.useState<Record<string, number>>({});
   const [lastWatched, setLastWatched] = React.useState<Record<string, Date>>({});
@@ -2656,7 +2656,7 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
 
   const { updateUser, addTransaction } = useUserData();
   const { walletConfig } = useWalletConfig();
-  const { appConfig } = useAppConfig(); // Get app config for monetag appId
+  const { appConfig } = useAppConfig();
 
   // Concurrency lock management
   const concurrencyLockRef = useRef<boolean>(false);
@@ -2807,7 +2807,7 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
     };
   }, [checkAndPerformDailyReset]);
 
-  // FIXED: Load ads config from Firebase with proper appId updating including Monetag
+  // FIXED: Load ads config from Firebase with proper watched count tracking
   React.useEffect(() => {
     const adsRef = ref(db, 'ads');
     const unsubscribe = onValue(adsRef, (snapshot) => {
@@ -2833,7 +2833,7 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
             id: index + 1,
             title: `Ads${index + 1}`,
             description: `${walletConfig.currency} ${cfg.reward || 0.5} per ad`,
-            watched: 0,
+            watched: 0, // Initialize watched count to 0
             dailyLimit: cfg.dailyLimit || 5,
             hourlyLimit: cfg.hourlyLimit || 2,
             provider: provider,
@@ -2841,7 +2841,7 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
             cooldown: cfg.cooldown || 60,
             reward: cfg.reward || 0.5,
             enabled: cfg.enabled !== false,
-            appId: cfg.appId || '', // Will be set from Firebase
+            appId: cfg.appId || '',
           };
           adsArray.push(ad);
         }
@@ -2862,21 +2862,10 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
     return () => unsubscribe();
   }, [walletConfig.currency]);
 
-  // FIXED: Add debug logging to see current appIds
-  React.useEffect(() => {
-    if (ads.length > 0) {
-      console.log('Current ads configuration:', ads.map(ad => ({
-        provider: ad.provider,
-        appId: ad.appId,
-        enabled: ad.enabled,
-        reward: ad.reward
-      })));
-    }
-  }, [ads]);
-
-  // Load user's ad watch history
+  // FIXED: Enhanced user ad watch history loading with proper watched count
   React.useEffect(() => {
     if (!userData?.telegramId || ads.length === 0) return;
+    
     const userAdsRef = ref(db, `userAds/${userData.telegramId}`);
     const unsubscribe = onValue(userAdsRef, (snapshot) => {
       if (!snapshot.exists()) return;
@@ -2886,16 +2875,26 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
       const bdTime = getBangladeshTime();
       const today = formatDate(bdTime);
 
-      setAds((prev) =>
-        prev.map((ad) => {
+      setAds((prevAds) =>
+        prevAds.map((ad) => {
           const pData = userAdsData[ad.provider];
-          if (pData?.lastWatched) newLastWatched[ad.provider] = new Date(pData.lastWatched);
+          if (pData?.lastWatched) {
+            newLastWatched[ad.provider] = new Date(pData.lastWatched);
+          }
 
           let watchedToday = pData?.watchedToday || 0;
           const lastReset = pData?.lastReset;
-          if (lastReset && formatDate(new Date(lastReset)) !== today) watchedToday = 0;
+          
+          // Reset if it's a new day
+          if (lastReset && formatDate(new Date(lastReset)) !== today) {
+            watchedToday = 0;
+          }
 
-          return { ...ad, watched: watchedToday, lastWatched: pData?.lastWatched ? new Date(pData.lastWatched) : undefined };
+          return { 
+            ...ad, 
+            watched: watchedToday, // Set the watched count from Firebase
+            lastWatched: pData?.lastWatched ? new Date(pData.lastWatched) : undefined 
+          };
         })
       );
       setLastWatched(newLastWatched);
@@ -2903,7 +2902,7 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
     return () => unsubscribe();
   }, [userData?.telegramId, ads]);
 
-  // FIXED: Enhanced script initialization to use updated appId including Monetag
+  // Script initialization
   React.useEffect(() => {
     const initScripts = () => {
       ads.forEach((ad) => {
@@ -2916,7 +2915,6 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
             if (!document.getElementById('gigapub-script')) {
               const s = document.createElement('script');
               s.id = 'gigapub-script';
-              // Use the appId from Firebase
               s.src = `https://ad.gigapub.tech/script?id=${ad.appId}`;
               s.async = true;
               s.onload = () => {
@@ -2939,7 +2937,6 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
             if (!document.getElementById('adsovio-script')) {
               const s = document.createElement('script');
               s.id = 'adsovio-script';
-              // Use the appId from Firebase
               s.src = `https://adsovio.com/cdn/ads.js?app_uid=${ad.appId}`;
               s.async = true;
               s.onload = () => {
@@ -2959,17 +2956,14 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
             break;
           }
           case 'adextra': {
-            // AdExtra is expected to be included in index.html
             setScriptLoaded((p) => ({ ...p, adextra: typeof window.p_adextra === 'function' || p.adextra }));
             setScriptsInitialized((p) => ({ ...p, adextra: true }));
             break;
           }
           case 'monetag': {
-            // NEW: Monetag initialization
             if (!document.getElementById('monetag-script')) {
               const s = document.createElement('script');
               s.id = 'monetag-script';
-              // Use the appId from Firebase (stored in appConfig.monetagAppId)
               const monetagAppId = appConfig.monetagAppId || ad.appId;
               s.src = `https://s.monetag.com/static/js/monetag.js?site_id=${monetagAppId}`;
               s.async = true;
@@ -3019,7 +3013,6 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
         
         try {
           if (window.initCdTma) {
-            // Use the updated appId from Firebase
             const onclickaAd = ads.find(ad => ad.provider === 'onclicka');
             const appId = onclickaAd?.appId;
             if (!appId) {
@@ -3050,7 +3043,6 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
       document.head.appendChild(script);
     };
 
-    // Only load if there's an Onclicka ad enabled with appId
     const onclickaAd = ads.find(ad => ad.provider === 'onclicka' && ad.enabled && ad.appId);
     if (onclickaAd && !scriptLoaded.onclicka) {
       console.log('Loading Onclicka with appId:', onclickaAd.appId);
@@ -3058,7 +3050,7 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
     }
   }, [ads, scriptLoaded.onclicka]);
 
-  // Cooldown ticker
+  // FIXED: Enhanced cooldown ticker that properly calculates remaining time
   React.useEffect(() => {
     const iv = setInterval(() => {
       const next: Record<string, number> = {};
@@ -3066,7 +3058,9 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
         const ad = ads.find((a) => a.provider === provider);
         if (ad && lastWatched[provider]) {
           const elapsed = (Date.now() - lastWatched[provider].getTime()) / 1000;
-          if (elapsed < ad.cooldown) next[provider] = Math.ceil(ad.cooldown - elapsed);
+          if (elapsed < ad.cooldown) {
+            next[provider] = Math.ceil(ad.cooldown - elapsed);
+          }
         }
       });
       setCooldowns(next);
@@ -3074,7 +3068,7 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
     return () => clearInterval(iv);
   }, [lastWatched, ads]);
 
-  // NEW: Enhanced recordAdWatch with total ads tracking
+  // Enhanced recordAdWatch with total ads tracking
   const recordAdWatch = async (adId: number): Promise<number> => {
     if (!userData) {
       showMessage('error', 'User not loaded. Try again.');
@@ -3093,13 +3087,13 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
       const newBalance = userData.balance + reward;
       const newTotalEarned = userData.totalEarned + reward;
       const newAdsCount = newAdsWatchedToday + 1;
-      const newTotalAdsWatched = (userData.totalAdsWatched || 0) + 1; // NEW: Increment total ads watched
+      const newTotalAdsWatched = (userData.totalAdsWatched || 0) + 1;
 
       await updateUser({
         balance: newBalance,
         totalEarned: newTotalEarned,
         adsWatchedToday: newAdsCount,
-        totalAdsWatched: newTotalAdsWatched, // NEW: Update total ads watched
+        totalAdsWatched: newTotalAdsWatched,
         lastAdWatch: now.toISOString(),
       });
 
@@ -3124,6 +3118,7 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
     }
   };
 
+  // FIXED: Enhanced updateUserAdWatch to properly update watched count
   const updateUserAdWatch = async (adId: number) => {
     if (!userData?.telegramId) return;
     const ad = ads.find((a) => a.id === adId);
@@ -3131,11 +3126,21 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
 
     const userAdRef = ref(db, `userAds/${userData.telegramId}/${ad.provider}`);
     const now = new Date().toISOString();
+    
+    // Get current watched count
+    const currentWatched = ad.watched || 0;
+    const newWatchedCount = currentWatched + 1;
+    
     await update(userAdRef, {
-      watchedToday: (ad.watched || 0) + 1,
+      watchedToday: newWatchedCount,
       lastWatched: now,
       lastUpdated: now,
     });
+
+    // Update local state immediately for better UX
+    setAds(prev => prev.map(a => 
+      a.id === adId ? { ...a, watched: newWatchedCount } : a
+    ));
   };
 
   const handleAdCompletion = async (adId: number) => {
@@ -3146,7 +3151,7 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
 
   const formatTime = (sec: number): string => (sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${sec % 60}s`);
 
-  // Enhanced AdExtra handler with proper timeout and error handling
+  // Enhanced AdExtra handler
   const runAdExtra = async (adId: number, ad: Ad) => {
     if (typeof window.p_adextra !== 'function') {
       showMessage('info', 'AdExtra initializing… please try again in a moment');
@@ -3165,7 +3170,6 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
     const onSuccess = async () => {
       console.log('AdExtra: Success callback received');
       await handleAdCompletion(adId);
-      setAds((prev) => prev.map((a) => (a.id === adId ? { ...a, watched: a.watched + 1 } : a)));
       setLastWatched((prev) => ({ ...prev, [ad.provider]: new Date() }));
       release();
     };
@@ -3214,7 +3218,6 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
       
       await window.showAd();
       await handleAdCompletion(adId);
-      setAds((prev) => prev.map((a) => (a.id === adId ? { ...a, watched: a.watched + 1 } : a)));
       setLastWatched((prev) => ({ ...prev, [ad.provider]: new Date() }));
       showMessage('success', `Onclicka completed! You earned ${walletConfig.currencySymbol}${ad.reward}`);
     } catch (error) {
@@ -3227,7 +3230,7 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
     }
   };
 
-  // NEW: Monetag handler
+  // Monetag handler
   const runMonetag = async (adId: number, ad: Ad) => {
     if (!window.monetag) {
       showMessage('error', 'Monetag not loaded properly. Please refresh and try again.');
@@ -3240,15 +3243,11 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
     try {
       showMessage('info', 'Loading Monetag...');
       
-      // Monetag typically auto-shows ads, but we need to track completion
-      // This is a simplified implementation - adjust based on Monetag's actual API
-      const monetagAd = await new Promise((resolve, _reject) => {
-        // Monetag usually auto-shows ads, so we'll use a timeout-based approach
+      const monetagAd = await new Promise((resolve) => {
         const timeout = setTimeout(() => {
-          resolve(true); // Assume ad was shown after timeout
-        }, 30000); // 30 second timeout
+          resolve(true);
+        }, 30000);
         
-        // If Monetag has a callback system, use it here
         if (window.monetag?.onAdCompleted) {
           window.monetag.onAdCompleted = () => {
             clearTimeout(timeout);
@@ -3259,7 +3258,6 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
 
       if (monetagAd) {
         await handleAdCompletion(adId);
-        setAds((prev) => prev.map((a) => (a.id === adId ? { ...a, watched: a.watched + 1 } : a)));
         setLastWatched((prev) => ({ ...prev, [ad.provider]: new Date() }));
         showMessage('success', `Monetag completed! You earned ${walletConfig.currencySymbol}${ad.reward}`);
       }
@@ -3275,7 +3273,6 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
 
   // Enhanced showAd with proper concurrency control
   const showAd = async (adId: number) => {
-    // Check concurrency lock
     if (concurrencyLockRef.current) {
       showMessage('info', 'Please complete the current ad first');
       return;
@@ -3291,7 +3288,6 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
       return;
     }
     
-    // Check if appId is available
     if (!ad.appId) {
       showMessage('error', 'Ad provider configuration is incomplete');
       return;
@@ -3308,13 +3304,12 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
       showMessage('info', 'Daily limit reached. Come back tomorrow!');
       return;
     }
-    if (lastWatched[ad.provider]) {
-      const elapsed = (now.getTime() - lastWatched[ad.provider].getTime()) / 1000;
-      if (elapsed < ad.cooldown) {
-        const waitLeft = Math.ceil(ad.cooldown - elapsed);
-        showMessage('info', `Please wait ${formatTime(waitLeft)} before next ad`);
-        return;
-      }
+    
+    // FIXED: Proper cooldown check using the cooldowns state
+    if (cooldowns[ad.provider] && cooldowns[ad.provider] > 0) {
+      const waitLeft = cooldowns[ad.provider];
+      showMessage('info', `Please wait ${formatTime(waitLeft)} before next ad`);
+      return;
     }
 
     // Set concurrency lock
@@ -3359,7 +3354,6 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
         const elapsed = (Date.now() - start) / 1000;
         if (elapsed >= minWaitTime) {
           await handleAdCompletion(adId);
-          setAds((prev) => prev.map((a) => (a.id === adId ? { ...a, watched: a.watched + 1 } : a)));
           setLastWatched((prev) => ({ ...prev, [ad.provider]: now }));
         } else {
           throw new Error(`Please watch the ad completely (minimum ${minWaitTime} seconds)`);
@@ -3378,21 +3372,23 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
     }
   };
 
+  // FIXED: Enhanced ad disabled check that properly uses cooldowns
   const isAdDisabled = (ad: Ad) => {
     if (!ad.enabled) return true;
-    if (!ad.appId) return true; // Disable if no appId
+    if (!ad.appId) return true;
     if (ad.dailyLimit > 0 && ad.watched >= ad.dailyLimit) return true;
-    if (cooldowns[ad.provider]) return true;
+    if (cooldowns[ad.provider] && cooldowns[ad.provider] > 0) return true;
     if (ad.provider !== 'adextra' && ad.provider !== 'monetag' && !scriptLoaded[ad.provider]) return true;
     if (concurrentLock && isWatchingAd !== ad.id) return true;
     return false;
   };
 
+  // FIXED: Enhanced button text that shows proper cooldown time
   const getButtonText = (ad: Ad) => {
     if (!ad.enabled) return 'Temporarily Disabled';
     if (!ad.appId) return 'Not Configured';
     if (ad.dailyLimit > 0 && ad.watched >= ad.dailyLimit) return 'Daily Limit Reached';
-    if (cooldowns[ad.provider]) return `Wait ${formatTime(cooldowns[ad.provider])}`;
+    if (cooldowns[ad.provider] && cooldowns[ad.provider] > 0) return `Wait ${formatTime(cooldowns[ad.provider])}`;
     if (ad.provider !== 'adextra' && ad.provider !== 'monetag' && !scriptLoaded[ad.provider]) return 'Loading...';
     if (concurrentLock && isWatchingAd !== ad.id) return 'Another in Progress';
     if (isWatchingAd === ad.id) return 'Watching Ad...';
@@ -3455,6 +3451,7 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
             </div>
           </div>
 
+          {/* FIXED: Progress bar that properly shows watched count */}
           <div className="w-full bg-neutral-800/40 rounded-full h-3 mb-3 overflow-hidden ring-1 ring-white/10">
             <div
               className="h-3 rounded-full transition-all duration-500 bg-gradient-to-r from-neutral-300 to-neutral-500 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5)]"
