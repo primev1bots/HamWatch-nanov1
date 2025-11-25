@@ -1029,8 +1029,8 @@ function useAppConfig() {
     supportUrl: 'https://t.me/nan0v1_support',
     tutorialVideoId: 'dQw4w9WgXcQ',
     referralCommissionRate: 10,
-    miningBaseAmount: 0.001,
-    miningMaxAmount: 1.0,
+    miningBaseAmount: 0.00,
+    miningMaxAmount: 0,
     miningDuration: 60000,
     monetagAppId: '',
     botUsername: 'use_bot' // ADD THIS LINE
@@ -1228,8 +1228,8 @@ function usePersistentMining() {
     if (elapsed < miningDuration) return 0
     
     // Calculate reward based on elapsed time and config from database
-    const baseAmount = appConfig.miningBaseAmount || 0.001
-    const maxAmount = appConfig.miningMaxAmount || 1.0
+    const baseAmount = appConfig.miningBaseAmount || 0.00
+    const maxAmount = appConfig.miningMaxAmount || 0
     
     // Linear progression from base to max over mining duration
     const progress = Math.min(elapsed / miningDuration, 1)
@@ -1281,8 +1281,8 @@ function usePersistentMining() {
     if (!miningData.isActive || !miningData.startTime) return 0
     
     const progress = getProgress()
-    const baseAmount = appConfig.miningBaseAmount || 0.001
-    const maxAmount = appConfig.miningMaxAmount || 1.0
+    const baseAmount = appConfig.miningBaseAmount || 0.00
+    const maxAmount = appConfig.miningMaxAmount || 0
     
     return parseFloat((baseAmount + (maxAmount - baseAmount) * progress).toFixed(4))
   }
