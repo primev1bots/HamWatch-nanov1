@@ -23,7 +23,6 @@ const firebaseConfig = {
   appId: "1:868246294583:web:70da61aadda9b1ed4defb2",
   measurementId: "G-20Z4Q1H7D9"
 };
-
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
@@ -1149,8 +1148,8 @@ function useAppConfig() {
     supportUrl: 'https://t.me/nan0v1_support',
     tutorialVideoId: 'dQw4w9WgXcQ',
     referralCommissionRate: 10,
-    miningBaseAmount: 0.00,
-    miningMaxAmount: 0.0,
+    miningBaseAmount: 0,
+    miningMaxAmount: 0,
     miningDuration: 60000,
     monetagAppId: '',
     botUsername: 'use_bot',
