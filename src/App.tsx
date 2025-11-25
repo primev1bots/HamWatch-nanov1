@@ -2874,59 +2874,32 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
     }
   }, [ads]);
 
-  // FIXED: Enhanced user ad watch tracking with proper watched count
+  // Load user's ad watch history
   React.useEffect(() => {
     if (!userData?.telegramId || ads.length === 0) return;
-    
     const userAdsRef = ref(db, `userAds/${userData.telegramId}`);
-    
     const unsubscribe = onValue(userAdsRef, (snapshot) => {
-      if (!snapshot.exists()) {
-        console.log('No user ads data found, initializing...');
-        return;
-      }
+      if (!snapshot.exists()) return;
 
       const userAdsData = snapshot.val();
-      console.log('User ads data:', userAdsData);
-      
       const newLastWatched: Record<string, Date> = {};
       const bdTime = getBangladeshTime();
       const today = formatDate(bdTime);
 
-      setAds((prevAds) =>
-        prevAds.map((ad) => {
+      setAds((prev) =>
+        prev.map((ad) => {
           const pData = userAdsData[ad.provider];
-          if (!pData) {
-            console.log(`No data for provider: ${ad.provider}`);
-            return ad;
-          }
-
-          if (pData?.lastWatched) {
-            newLastWatched[ad.provider] = new Date(pData.lastWatched);
-          }
+          if (pData?.lastWatched) newLastWatched[ad.provider] = new Date(pData.lastWatched);
 
           let watchedToday = pData?.watchedToday || 0;
           const lastReset = pData?.lastReset;
-          
-          // Reset if last reset was not today
-          if (lastReset && formatDate(new Date(lastReset)) !== today) {
-            watchedToday = 0;
-            console.log(`Resetting watched count for ${ad.provider} - last reset: ${lastReset}, today: ${today}`);
-          }
+          if (lastReset && formatDate(new Date(lastReset)) !== today) watchedToday = 0;
 
-          console.log(`Provider ${ad.provider}: watchedToday = ${watchedToday}, lastWatched: ${pData.lastWatched}`);
-          
-          return { 
-            ...ad, 
-            watched: watchedToday, 
-            lastWatched: pData?.lastWatched ? new Date(pData.lastWatched) : undefined 
-          };
+          return { ...ad, watched: watchedToday, lastWatched: pData?.lastWatched ? new Date(pData.lastWatched) : undefined };
         })
       );
-      
       setLastWatched(newLastWatched);
     });
-
     return () => unsubscribe();
   }, [userData?.telegramId, ads]);
 
@@ -3085,7 +3058,7 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
     }
   }, [ads, scriptLoaded.onclicka]);
 
-  // FIXED: Enhanced cooldown ticker with proper calculation
+  // Cooldown ticker
   React.useEffect(() => {
     const iv = setInterval(() => {
       const next: Record<string, number> = {};
@@ -3093,10 +3066,7 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
         const ad = ads.find((a) => a.provider === provider);
         if (ad && lastWatched[provider]) {
           const elapsed = (Date.now() - lastWatched[provider].getTime()) / 1000;
-          if (elapsed < ad.cooldown) {
-            next[provider] = Math.ceil(ad.cooldown - elapsed);
-            console.log(`Cooldown for ${provider}: ${next[provider]}s remaining`);
-          }
+          if (elapsed < ad.cooldown) next[provider] = Math.ceil(ad.cooldown - elapsed);
         }
       });
       setCooldowns(next);
@@ -3154,7 +3124,6 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
     }
   };
 
-  // FIXED: Enhanced updateUserAdWatch with proper watched count tracking
   const updateUserAdWatch = async (adId: number) => {
     if (!userData?.telegramId) return;
     const ad = ads.find((a) => a.id === adId);
@@ -3162,19 +3131,11 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
 
     const userAdRef = ref(db, `userAds/${userData.telegramId}/${ad.provider}`);
     const now = new Date().toISOString();
-    
-    // Get current watched count
-    const currentSnapshot = await get(userAdRef);
-    const currentData = currentSnapshot.exists() ? currentSnapshot.val() : {};
-    const currentWatched = currentData.watchedToday || 0;
-    
     await update(userAdRef, {
-      watchedToday: currentWatched + 1,
+      watchedToday: (ad.watched || 0) + 1,
       lastWatched: now,
       lastUpdated: now,
     });
-    
-    console.log(`Updated watched count for ${ad.provider}: ${currentWatched} -> ${currentWatched + 1}`);
   };
 
   const handleAdCompletion = async (adId: number) => {
@@ -3347,12 +3308,8 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
       showMessage('info', 'Daily limit reached. Come back tomorrow!');
       return;
     }
-    
-    // FIXED: Enhanced cooldown check with proper calculation
     if (lastWatched[ad.provider]) {
       const elapsed = (now.getTime() - lastWatched[ad.provider].getTime()) / 1000;
-      console.log(`Cooldown check for ${ad.provider}: elapsed=${elapsed}s, cooldown=${ad.cooldown}s`);
-      
       if (elapsed < ad.cooldown) {
         const waitLeft = Math.ceil(ad.cooldown - elapsed);
         showMessage('info', `Please wait ${formatTime(waitLeft)} before next ad`);
@@ -3511,15 +3468,6 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
             </span>
             <span className="text-neutral-300 tabular-nums">wait: {ad.waitTime}s</span>
           </div>
-
-          {/* FIXED: Enhanced cooldown display */}
-          {cooldowns[ad.provider] && (
-            <div className="mb-2 text-center">
-              <span className="text-yellow-400 text-xs font-medium bg-yellow-500/10 px-2 py-1 rounded border border-yellow-500/20">
-                Cooldown: {formatTime(cooldowns[ad.provider])}
-              </span>
-            </div>
-          )}
 
           <div className="flex justify-center">
             <button
@@ -4760,4 +4708,4 @@ export default function HomePage() {
       </TabProvider>
     </>
   )
-}
+}   
