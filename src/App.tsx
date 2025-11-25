@@ -23,13 +23,14 @@ const firebaseConfig = {
   appId: "1:868246294583:web:70da61aadda9b1ed4defb2",
   measurementId: "G-20Z4Q1H7D9"
 };
+
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 
 // Types
 type TabType = 'home' | 'earn' | 'friends' | 'profile'
-type TransactionType = 'claim' | 'ad_reward' | 'task_reward' | 'withdrawal' | 'referral' | 'referral_commission'
+type TransactionType = 'claim' | 'ad_reward' | 'task_reward' | 'withdrawal' | 'referral'
 type TransactionStatus = 'completed' | 'pending' | 'failed'
 
 // Telegram WebApp Types
@@ -84,7 +85,7 @@ interface UserData {
   totalWithdrawn: number;
   joinDate: string;
   adsWatchedToday: number;
-  totalAdsWatched: number; // Total lifetime ads watched
+  totalAdsWatched: number; // NEW: Total lifetime ads watched
   tasksCompleted: {
     [taskId: string]: {
       completedAt: string;
@@ -105,15 +106,7 @@ interface UserData {
   lastAdWatch?: string;
   deviceId?: string;
   isMainAccount?: boolean;
-  lastActive: string;
-  // NEW: Enhanced ads tracking
-  adsHistory?: {
-    [timestamp: string]: {
-      provider: string;
-      reward: number;
-      type: string;
-    };
-  };
+  lastActive: string; // NEW: Track user activity
 }
 
 interface ReferralData {
@@ -219,9 +212,8 @@ interface AppConfig {
   miningBaseAmount: number;
   miningMaxAmount: number;
   miningDuration: number;
-  monetagAppId: string;
+  monetagAppId: string; // NEW: Monetag app ID from database
   botUsername: string;
-  libtlZoneId: string; // ADD THIS LINE
 }
 
 interface SliderImage {
@@ -316,7 +308,6 @@ const generateDeviceId = (): string => {
 };
 
 // Active Users Tracking Hook
-// Enhanced Active Users Tracking Hook
 function useActiveUsers() {
   const [activeUsers, setActiveUsers] = useState<ActiveUsersStats>({
     totalUsers: 0,
@@ -340,71 +331,37 @@ function useActiveUsers() {
   return { activeUsers };
 }
 
-// Function to update active users stats
-const updateActiveUsersStats = async () => {
-  try {
-    const statsRef = ref(db, 'activeUsersStats');
-    const now = new Date();
-    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-    // Get all users
-    const usersRef = ref(db, 'users');
-    const usersSnapshot = await get(usersRef);
-    
-    if (!usersSnapshot.exists()) return;
-
-    const users = usersSnapshot.val();
-    const userList = Object.values(users) as UserData[];
-    
-    // Calculate active users
-    const active24h = userList.filter(user => 
-      user.lastActive && new Date(user.lastActive) >= twentyFourHoursAgo
-    ).length;
-    
-    const active7d = userList.filter(user => 
-      user.lastActive && new Date(user.lastActive) >= sevenDaysAgo
-    ).length;
-
-    const totalUsers = userList.length;
-
-    await update(statsRef, {
-      totalUsers,
-      active24h,
-      active7d,
-      lastUpdated: now.toISOString()
-    });
-
-  } catch (error) {
-    console.error('Error updating active users stats:', error);
-  }
-};
-
 // Update user activity when component mounts
 function useUserActivity() {
-  const { userData, updateUser } = useUserData();
+  const { userData } = useUserData();
 
   useEffect(() => {
     if (!userData?.telegramId) return;
 
     const updateActivity = async () => {
+      const userRef = ref(db, `users/${userData.telegramId}`);
       const now = new Date().toISOString();
       
-      await updateUser({
+      await update(userRef, {
         lastActive: now
       });
 
       // Update active users stats
-      await updateActiveUsersStats();
+      const statsRef = ref(db, 'activeUsersStats');
+      const statsSnapshot = await get(statsRef);
+      const currentStats = statsSnapshot.exists() ? statsSnapshot.val() : { totalUsers: 0, active24h: 0, active7d: 0 };
+      
+      // This would be more sophisticated in a real implementation
+      // For now, we'll just increment active24h when user is active
+      await update(statsRef, {
+        totalUsers: currentStats.totalUsers,
+        active24h: currentStats.active24h + 1,
+        active7d: currentStats.active7d,
+        lastUpdated: now
+      });
     };
 
-    // Update on component mount
     updateActivity();
-
-    // Set up periodic updates (every 5 minutes)
-    const interval = setInterval(updateActivity, 5 * 60 * 1000);
-    
-    return () => clearInterval(interval);
   }, [userData?.telegramId]);
 }
 
@@ -844,18 +801,11 @@ function useUserData() {
       if (snapshot.exists()) {
         const data = snapshot.val()
         
-        // Ensure totalAdsWatched exists and is a number
-        const enhancedData = {
-          ...data,
-          totalAdsWatched: typeof data.totalAdsWatched === 'number' ? data.totalAdsWatched : 0,
-          adsHistory: data.adsHistory || {},
-          stats: data.stats || {}
-        }
-        
         // Check device restrictions for existing user
         if (deviceRestrictions.enabled) {
-          const registration = await registerAccount(enhancedData)
+          const registration = await registerAccount(data)
           if (!registration.success) {
+            // Device limit reached for existing user
             setUserData(null)
             setLoading(false)
             setDeviceCheckComplete(true)
@@ -863,9 +813,13 @@ function useUserData() {
           }
         }
         
-        setUserData(enhancedData)
+        setUserData(data)
         setDeviceCheckComplete(true)
       } else {
+        // Check for referral parameter in start command
+        const startParam = new URLSearchParams(window.Telegram.WebApp.initData).get('start')
+        const referredBy = startParam && startParam !== 'default' ? startParam : undefined
+        
         // Create new user with enhanced structure
         const today = new Date().toISOString().split('T')[0];
         const newUser: UserData = {
@@ -878,9 +832,9 @@ function useUserData() {
           totalWithdrawn: 0,
           joinDate: new Date().toISOString(),
           adsWatchedToday: 0,
-          totalAdsWatched: 0, // Initialize total ads watched
+          totalAdsWatched: 0, // NEW: Initialize total ads watched
           tasksCompleted: {},
-          referredBy: new URLSearchParams(window.Telegram.WebApp.initData).get('start') || undefined,
+          referredBy: referredBy,
           referral: {
             code: tgUser.id.toString(),
             bonusGiven: false
@@ -888,14 +842,14 @@ function useUserData() {
           stats: {
             [today]: { ads: 0, earned: 0 }
           },
-          lastActive: new Date().toISOString(),
-          adsHistory: {} // Initialize empty ads history
+          lastActive: new Date().toISOString() // NEW: Track last activity
         }
 
         // Check device restrictions before creating new user
         if (deviceRestrictions.enabled) {
           const registration = await registerAccount(newUser)
           if (!registration.success) {
+            // Device limit reached for new user
             setUserData(null)
             setLoading(false)
             setDeviceCheckComplete(true)
@@ -914,83 +868,12 @@ function useUserData() {
     return () => unsubscribe()
   }, [])
 
-  // Enhanced updateUser function
   const updateUser = async (updates: Partial<UserData>) => {
     const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user
     if (!tgUser?.id) return
 
     const userRef = ref(db, `users/${tgUser.id}`)
-    
-    // Ensure totalAdsWatched is preserved during updates
-    const safeUpdates = {
-      ...updates,
-      totalAdsWatched: updates.totalAdsWatched !== undefined ? updates.totalAdsWatched : userData?.totalAdsWatched || 0
-    }
-    
-    await update(userRef, safeUpdates)
-  }
-
-  // Enhanced function to record ad watch with total tracking
-  const recordAdWatch = async (adData: {
-    provider: string;
-    reward: number;
-    type?: string;
-  }) => {
-    const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user
-    if (!tgUser?.id || !userData) return false
-
-    try {
-      const now = new Date();
-      const today = now.toISOString().split('T')[0];
-      const timestamp = now.getTime().toString();
-      
-      // Calculate new values
-      const newAdsWatchedToday = (userData.adsWatchedToday || 0) + 1;
-      const newTotalAdsWatched = (userData.totalAdsWatched || 0) + 1;
-      const newBalance = userData.balance + adData.reward;
-      const newTotalEarned = userData.totalEarned + adData.reward;
-      
-      // Update stats for today
-      const todayStats = userData.stats?.[today] || { ads: 0, earned: 0 };
-      const newStats = {
-        ...userData.stats,
-        [today]: {
-          ads: todayStats.ads + 1,
-          earned: todayStats.earned + adData.reward
-        }
-      };
-      
-      // Add to ads history
-      const newAdsHistory = {
-        ...userData.adsHistory,
-        [timestamp]: {
-          provider: adData.provider,
-          reward: adData.reward,
-          type: adData.type || 'ad_reward'
-        }
-      };
-
-      const updates: Partial<UserData> = {
-        balance: newBalance,
-        totalEarned: newTotalEarned,
-        adsWatchedToday: newAdsWatchedToday,
-        totalAdsWatched: newTotalAdsWatched,
-        lastAdWatch: now.toISOString(),
-        stats: newStats,
-        adsHistory: newAdsHistory,
-        lastActive: now.toISOString() // Update last activity
-      };
-
-      await updateUser(updates);
-      
-      // Update active users stats
-      await updateActiveUsersStats();
-      
-      return true;
-    } catch (error) {
-      console.error('Error recording ad watch:', error);
-      return false;
-    }
+    await update(userRef, updates)
   }
 
   const addTransaction = async (transaction: Omit<Transaction, 'id'>) => {
@@ -1009,8 +892,7 @@ function useUserData() {
     userData, 
     loading: loading || !deviceCheckComplete, 
     updateUser, 
-    addTransaction,
-    recordAdWatch // Export the enhanced function
+    addTransaction 
   }
 }
 
@@ -1139,21 +1021,19 @@ function usePaymentMethods() {
 }
 
 // App Configuration Hook with mining values and monetag
-// App Configuration Hook with mining values, monetag, and libtl
 function useAppConfig() {
   const [appConfig, setAppConfig] = useState<AppConfig>({
-    logoUrl: '',
+     logoUrl: '',
     appName: 'NanoV1',
     sliderImages: [],
     supportUrl: 'https://t.me/nan0v1_support',
     tutorialVideoId: 'dQw4w9WgXcQ',
     referralCommissionRate: 10,
-    miningBaseAmount: 0,
-    miningMaxAmount: 0,
+    miningBaseAmount: 0.001,
+    miningMaxAmount: 1.0,
     miningDuration: 60000,
     monetagAppId: '',
-    botUsername: 'use_bot',
-    libtlZoneId: '' // ADD THIS WITH DEFAULT VALUE
+    botUsername: 'use_bot' // ADD THIS LINE
   });
   const [loading, setLoading] = useState(true);
 
@@ -1165,18 +1045,9 @@ function useAppConfig() {
         const configData = snapshot.val();
         setAppConfig({
           // Keep existing defaults as fallback
-          logoUrl: configData.logoUrl || '',
-          appName: configData.appName || 'NanoV1',
-          sliderImages: configData.sliderImages || [],
-          supportUrl: configData.supportUrl || 'https://t.me/nan0v1_support',
-          tutorialVideoId: configData.tutorialVideoId || 'dQw4w9WgXcQ',
-          referralCommissionRate: configData.referralCommissionRate || 10,
-          miningBaseAmount: configData.miningBaseAmount || 0,
-          miningMaxAmount: configData.miningMaxAmount || 0,
-          miningDuration: configData.miningDuration || 60000,
-          monetagAppId: configData.monetagAppId || '',
-          botUsername: configData.botUsername || 'use_bot',
-          libtlZoneId: configData.libtlZoneId || '' // ADD THIS LINE
+          ...appConfig,
+          // Override with database values
+          ...configData
         });
       }
       setLoading(false);
@@ -1284,7 +1155,7 @@ function useEarningsTransactions() {
   
   return useMemo(() => {
     return transactions.filter(tx => 
-      ['claim', 'ad_reward', 'task_reward', 'referral', 'referral_commission'].includes(tx.type) &&
+      ['claim', 'ad_reward', 'task_reward', 'referral'].includes(tx.type) &&
       tx.status === 'completed'
     )
   }, [transactions])
@@ -1357,8 +1228,8 @@ function usePersistentMining() {
     if (elapsed < miningDuration) return 0
     
     // Calculate reward based on elapsed time and config from database
-    const baseAmount = appConfig.miningBaseAmount || 0
-    const maxAmount = appConfig.miningMaxAmount || 0
+    const baseAmount = appConfig.miningBaseAmount || 0.001
+    const maxAmount = appConfig.miningMaxAmount || 1.0
     
     // Linear progression from base to max over mining duration
     const progress = Math.min(elapsed / miningDuration, 1)
@@ -1410,8 +1281,8 @@ function usePersistentMining() {
     if (!miningData.isActive || !miningData.startTime) return 0
     
     const progress = getProgress()
-    const baseAmount = appConfig.miningBaseAmount || 0
-    const maxAmount = appConfig.miningMaxAmount || 0
+    const baseAmount = appConfig.miningBaseAmount || 0.001
+    const maxAmount = appConfig.miningMaxAmount || 1.0
     
     return parseFloat((baseAmount + (maxAmount - baseAmount) * progress).toFixed(4))
   }
@@ -1472,32 +1343,11 @@ const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose }) => {
   const transactions = useEarningsTransactions();
   const { walletConfig } = useWalletConfig();
   const [currentPage, setCurrentPage] = useState(1);
-  const [filterType, setFilterType] = useState<'all' | 'ad_rewards'>('all');
   const itemsPerPage = 5;
 
-  // Filter transactions based on selected filter
-  const filteredTransactions = useMemo(() => {
-    if (filterType === 'ad_rewards') {
-      return transactions.filter(tx => tx.type === 'ad_reward');
-    }
-    return transactions;
-  }, [transactions, filterType]);
-
-  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
+  const totalPages = Math.ceil(transactions.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedTransactions = filteredTransactions.slice(startIndex, startIndex + itemsPerPage);
-
-  // Calculate ad rewards statistics
-  const adRewardsStats = useMemo(() => {
-    const adRewards = transactions.filter(tx => tx.type === 'ad_reward');
-    const totalAdRewards = adRewards.length;
-    const totalEarnedFromAds = adRewards.reduce((sum, tx) => sum + tx.amount, 0);
-    
-    return {
-      totalAdRewards,
-      totalEarnedFromAds
-    };
-  }, [transactions]);
+  const paginatedTransactions = transactions.slice(startIndex, startIndex + itemsPerPage);
 
   const getTransactionIcon = (type: TransactionType) => {
     switch (type) {
@@ -1549,12 +1399,7 @@ const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose }) => {
       <div className="bg-[#151516] border border-white/10 rounded-2xl w-full max-w-md max-h-[80vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-white/10">
-          <div>
-            <h2 className="text-xl font-bold text-white">Earnings History</h2>
-            <p className="text-xs text-gray-400 mt-1">
-              Ads: {adRewardsStats.totalAdRewards} • Earned: {walletConfig.currencySymbol}{adRewardsStats.totalEarnedFromAds}
-            </p>
-          </div>
+          <h2 className="text-xl font-bold text-white">Earnings History</h2>
           <button
             onClick={onClose}
             className="p-2 hover:bg-white/10 rounded-xl transition-colors"
@@ -1563,50 +1408,13 @@ const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        {/* Filter Tabs */}
-        <div className="flex border-b border-white/10">
-          <button
-            onClick={() => {
-              setFilterType('all');
-              setCurrentPage(1);
-            }}
-            className={`flex-1 py-3 text-sm font-medium transition-colors ${
-              filterType === 'all' 
-                ? 'text-blue-400 border-b-2 border-blue-400' 
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            All Earnings
-          </button>
-          <button
-            onClick={() => {
-              setFilterType('ad_rewards');
-              setCurrentPage(1);
-            }}
-            className={`flex-1 py-3 text-sm font-medium transition-colors ${
-              filterType === 'ad_rewards' 
-                ? 'text-blue-400 border-b-2 border-blue-400' 
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            Ad Rewards
-          </button>
-        </div>
-
         {/* Content */}
         <div className="p-4 overflow-y-auto max-h-[60vh]">
           {paginatedTransactions.length === 0 ? (
             <div className="text-center py-8">
               <History className="w-12 h-12 text-gray-500 mx-auto mb-3" />
-              <p className="text-gray-400">
-                {filterType === 'ad_rewards' ? 'No ad rewards yet' : 'No earnings history yet'}
-              </p>
-              <p className="text-gray-500 text-sm mt-1">
-                {filterType === 'ad_rewards' 
-                  ? 'Watch ads to see your rewards here' 
-                  : 'Complete tasks and watch ads to see your earnings here'
-                }
-              </p>
+              <p className="text-gray-400">No earnings history yet</p>
+              <p className="text-gray-500 text-sm mt-1">Complete tasks and watch ads to see your earnings here</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -1631,7 +1439,7 @@ const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose }) => {
                     </div>
                     <div className="text-right">
                       <p className="text-green-400 font-bold text-sm">
-                        +{walletConfig.currencySymbol}{transaction.amount}
+                        +{walletConfig.currencySymbol}{transaction.amount.toFixed(2)}
                       </p>
                       <p className="text-gray-400 text-xs">
                         {transaction.description}
@@ -1700,7 +1508,7 @@ const Topbar = () => {
               </span>
             </div>
           </div>
- <div className="bg-[#007aff] text-white px-3 py-0.5 rounded-full flex items-center gap-2">
+          <div className="bg-[#007aff] text-white px-3 py-0.5 rounded-full flex items-center gap-2">
             <Wallet className="w-5 h-5" />
             <span>{walletConfig.currencySymbol}{userData?.balance.toFixed(2) || '0.00'}</span>
           </div>
@@ -1771,13 +1579,13 @@ const TabContainer = () => {
   )
 }
 
-// Home Tab Component with Proper libtl.com Integration
+// Home Tab Component with libtl.com integration
 const HomeTab: React.FC = () => {
   const { userData, updateUser, addTransaction } = useUserData()
   const { referralData } = useReferralData()
   const { walletConfig } = useWalletConfig()
-  const { appConfig, loading: appConfigLoading } = useAppConfig() // Get loading state
-  useUserActivity()
+  const { appConfig } = useAppConfig() // Get app config for mining values
+  useUserActivity() // Track user activity
   const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user
 
   const {
@@ -1793,157 +1601,90 @@ const HomeTab: React.FC = () => {
   const currentAmount = getCurrentAmount()
   const { parts } = useMiningCountdown(remainingTime)
 
-  // libtl.com rewarded ad state
+  // Debug logging to see actual mining values from database
+  useEffect(() => {
+    console.log('Mining Config from Database:', {
+      baseAmount: appConfig.miningBaseAmount,
+      maxAmount: appConfig.miningMaxAmount,
+      duration: appConfig.miningDuration
+    })
+  }, [appConfig])
+
+  // libtl.com rewarded ad setup
   const [showingAd, setShowingAd] = useState(false)
   const [libtlLoaded, setLibtlLoaded] = useState(false)
-  const [libtlScriptInjected, setLibtlScriptInjected] = useState(false)
 
-  // Effect to load libtl SDK only when appConfig is ready
   useEffect(() => {
-    if (appConfigLoading || libtlScriptInjected) return
-
-    const libtlZoneId = appConfig.libtlZoneId // Get from Firebase config
-    if (!libtlZoneId) {
-      console.warn('libtl Zone ID not configured in Firebase')
-      return
-    }
-
-    // Remove any existing libtl script first
-    const existingScript = document.getElementById('libtl-sdk-script')
-    if (existingScript) {
-      existingScript.remove()
-    }
-
-    // Inject the libtl SDK with proper configuration from Firebase
+    // Inject the libtl SDK once
     const script = document.createElement('script')
-    script.id = 'libtl-sdk-script'
     script.src = '//libtl.com/sdk.js'
     script.async = true
-    script.setAttribute('data-zone', libtlZoneId)
-    script.setAttribute('data-sdk', `show_${libtlZoneId}`)
+    script.setAttribute('data-zone', '10209973')
+    script.setAttribute('data-sdk', 'show_10209973')
     
     script.onload = () => {
-      console.log('libtl SDK loaded successfully with zone:', libtlZoneId)
+      console.log('libtl SDK loaded successfully')
       setLibtlLoaded(true)
-      setLibtlScriptInjected(true)
     }
     
-    script.onerror = (error) => {
-      console.error('Failed to load libtl SDK:', error)
+    script.onerror = () => {
+      console.error('Failed to load libtl SDK')
       setLibtlLoaded(false)
-      setLibtlScriptInjected(true)
     }
     
     document.body.appendChild(script)
-
-    return () => {
-      // Cleanup on unmount
-      try {
-        const script = document.getElementById('libtl-sdk-script')
-        if (script) document.body.removeChild(script)
-      } catch (e) {
-        console.warn('Error cleaning up libtl script:', e)
-      }
-    }
-  }, [appConfigLoading, appConfig.libtlZoneId, libtlScriptInjected])
-
-  // Effect to reload libtl SDK when configuration changes
-  useEffect(() => {
-    if (appConfig.libtlZoneId && libtlScriptInjected) {
-      console.log('libtl configuration changed, reloading SDK...')
-      setLibtlScriptInjected(false)
-      setLibtlLoaded(false)
-    }
-  }, [appConfig.libtlZoneId])
-
-  // Enhanced showRewardedAd function with proper error handling
-  const showRewardedAd = async (): Promise<boolean> => {
-    const libtlZoneId = appConfig.libtlZoneId
-    if (!libtlZoneId) {
-      console.error('libtl Zone ID not configured')
-      return false
-    }
-
-    const showAdFunction = (window as any)[`show_${libtlZoneId}`]
     
+    return () => {
+      // Clean up the script if the component unmounts
+      try {
+        document.body.removeChild(script)
+      } catch {}
+    }
+  }, [])
+
+  // Helper to show the rewarded ad and resolve when it's done/closed
+  const showRewardedAd = async (): Promise<boolean> => {
     return new Promise((resolve) => {
       try {
-        if (typeof showAdFunction !== 'function') {
-          console.error('libtl show function not available')
-          resolve(false)
-          return
-        }
-
-        // Set a reasonable timeout for the ad
-        const timeoutDuration = 45000 // 45 seconds
-        let timeoutId: NodeJS.Timeout
-        let adCompleted = false
-
-        const cleanup = (success: boolean) => {
-          if (adCompleted) return
-          adCompleted = true
-          clearTimeout(timeoutId)
-          resolve(success)
-        }
-
-        // Set timeout
-        timeoutId = setTimeout(() => {
-          console.warn('libtl ad timeout reached')
-          cleanup(false)
-        }, timeoutDuration)
-
-        // Execute the ad function
-        const result = showAdFunction()
-        
-        if (result && typeof result.then === 'function') {
-          // Promise-based API
-          result
-            .then(() => {
-              console.log('libtl ad completed successfully')
-              cleanup(true)
-            })
-            .catch((error: any) => {
-              console.error('libtl ad failed:', error)
-              cleanup(false)
-            })
-        } else {
-          // Callback-based API or no return value
-          // Assume success after a shorter delay if no callbacks
-          console.log('libtl ad started (assuming success)')
-          // We'll rely on the timeout or ad completion callbacks
-          // Note: libtl might use different callback mechanisms
-        }
-
-        // Additional fallback: check for libtl global callbacks
-        if (window.libtl) {
-          window.libtl.onAdCompleted = () => {
-            console.log('libtl ad completed via global callback')
-            cleanup(true)
-          }
+        const showAdFunction = (window as any).show_10209973
+        if (typeof showAdFunction === 'function') {
+          // libtl SDK function - we assume it returns a promise or uses callbacks
+          const result = showAdFunction()
           
-          window.libtl.onAdFailed = () => {
-            console.log('libtl ad failed via global callback')
-            cleanup(false)
+          if (result && typeof result.then === 'function') {
+            // If it returns a promise, wait for it
+            result
+              .then(() => {
+                console.log('libtl ad completed successfully')
+                resolve(true)
+              })
+              .catch(() => {
+                console.log('libtl ad failed or was skipped')
+                resolve(false)
+              })
+          } else {
+            // If no promise returned, assume success after a reasonable timeout
+            console.log('libtl ad started (no promise returned)')
+            setTimeout(() => {
+              resolve(true)
+            }, 30000) // 30 second timeout as fallback
           }
+        } else {
+          console.warn('libtl show function not available')
+          // If function not available, proceed anyway to not block users
+          resolve(true)
         }
-
       } catch (error) {
         console.error('Error showing libtl ad:', error)
-        resolve(false)
+        // Don't block user flow if ad fails
+        resolve(true)
       }
     })
   }
 
-  // Enhanced claim handler with proper libtl integration
+  // Enhanced claim handler with libtl ad gate
   const handleClaim = async () => {
-    if (!userData) {
-      window?.Telegram?.WebApp?.showPopup?.({
-        title: 'Error',
-        message: 'User data not loaded. Please try again.',
-        buttons: [{ type: 'ok' }],
-      })
-      return
-    }
+    if (!userData) return
 
     try {
       // If mining not active → start session
@@ -1961,16 +1702,6 @@ const HomeTab: React.FC = () => {
 
       // If claimable → show rewarded ad first, then claim
       if (canClaim) {
-        // Check if libtl is properly loaded
-        if (!libtlLoaded) {
-          window?.Telegram?.WebApp?.showPopup?.({
-            title: 'Ads Not Ready',
-            message: 'Ad provider is still loading. Please wait a moment and try again.',
-            buttons: [{ type: 'ok' }],
-          })
-          return
-        }
-
         setShowingAd(true)
         
         try {
@@ -2000,11 +1731,9 @@ const HomeTab: React.FC = () => {
 
               window?.Telegram?.WebApp?.showPopup?.({
                 title: 'Claim Successful!',
-                message: `You claimed ${walletConfig.currencySymbol}${claimAmount.toFixed(4)}`,
+                message: `You claimed ${walletConfig.currencySymbol}${claimAmount.toFixed(2)}`,
                 buttons: [{ type: 'ok' }],
               })
-            } else {
-              throw new Error('Invalid claim amount')
             }
           } else {
             // Ad was not completed
@@ -2017,7 +1746,7 @@ const HomeTab: React.FC = () => {
         } catch (error) {
           console.error('Error in ad viewing process:', error)
           window?.Telegram?.WebApp?.showPopup?.({
-            title: 'Ad Error',
+            title: 'Error',
             message: 'Something went wrong with the ad. Please try again.',
             buttons: [{ type: 'ok' }],
           })
@@ -2047,14 +1776,6 @@ const HomeTab: React.FC = () => {
     }
   }
 
-  // Debug info for libtl status
-  const getLibtlStatus = () => {
-    if (appConfigLoading) return 'Loading configuration...'
-    if (!appConfig.libtlZoneId) return 'Not configured in Firebase'
-    if (!libtlLoaded) return 'Loading ad provider...'
-    return 'Ad provider ready'
-  }
-
   return (
     <div className="home-tab-con transition-all duration-300 pb-10">
       <div className="relative mx-4 mt-0 mb-2">
@@ -2082,7 +1803,7 @@ const HomeTab: React.FC = () => {
 
         {/* Live animated amount */}
         <div className="text-white mt-5 text-2xl font-bold">
-          {currentAmount.toFixed(4)}{' '}
+          {currentAmount.toFixed(2)}{' '}
           <span className="text-purple-400">{walletConfig.currencySymbol}</span>
         </div>
 
@@ -2118,15 +1839,17 @@ const HomeTab: React.FC = () => {
               : canClaim
               ? (showingAd
                   ? 'Showing Ad...'
-                  : `Claim ${walletConfig.currencySymbol}${currentAmount.toFixed(4)}`)
+                  : `Claim ${walletConfig.currencySymbol}${currentAmount.toFixed(2)}`)
               : 'Mining...'}
           </button>
         </div>
 
         {/* libtl SDK status indicator */}
-        <div className="mt-4 text-xs text-gray-400">
-          {getLibtlStatus()}
-        </div>
+        {!libtlLoaded && (
+          <div className="mt-4 text-xs text-yellow-400">
+            Loading ads provider... Please wait
+          </div>
+        )}
       </div>
 
       <div className="bg-[#ffffff0d] border border-[#2d2d2e] rounded-xl mx-4 mt-8 p-4 flex justify-between items-center">
@@ -2544,7 +2267,7 @@ const DailyTasks: React.FC<DailyTasksProps> = ({
         // Show success message
         window.Telegram?.WebApp?.showPopup?.({
           title: 'Task Completed! 🎉',
-          message: `You earned ${walletConfig.currencySymbol}${task.reward}`,
+          message: `You earned ${walletConfig.currencySymbol}${task.reward.toFixed(2)}`,
           buttons: [{ type: 'ok' }]
         });
         
@@ -2907,6 +2630,7 @@ const DailyTasks: React.FC<DailyTasksProps> = ({
   );
 };
 
+// Enhanced AdsDashboard with Monetag integration
 const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) => {
   const [ads, setAds] = React.useState<Ad[]>([]);
   const [isWatchingAd, setIsWatchingAd] = React.useState<number | null>(null);
