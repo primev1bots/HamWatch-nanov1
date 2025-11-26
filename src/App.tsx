@@ -3636,14 +3636,22 @@ const FriendsTab = () => {
   useUserData()
   const { referralData } = useReferralData()
   const { walletConfig } = useWalletConfig()
-  const { appConfig } = useAppConfig()
+  const { appConfig } = useAppConfig() // Get app config which includes botUsername
   useReferralEarningsTracker() // Track referral earnings
+  useUserActivity() // Track user activity
   const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user
 
   const referUrl = useMemo(() => {
-    if (typeof window === 'undefined' || !tgUser?.id) return 'https://t.me/HamWatch_Bot?start=default'
-    return `https://t.me/HamWatch_Bot?start=${tgUser.id}`
-  }, [tgUser?.id])
+    if (typeof window === 'undefined' || !tgUser?.id) {
+      // Use botUsername from appConfig or fallback to default
+      const botUsername = appConfig.botUsername || ''
+      return `https://t.me/${botUsername}?start=default`
+    }
+    
+    // Use botUsername from appConfig or fallback to default
+    const botUsername = appConfig.botUsername || ''
+    return `https://t.me/${botUsername}?start=${tgUser.id}`
+  }, [tgUser?.id, appConfig.botUsername]) // Add appConfig.botUsername to dependencies
 
   const [copied, setCopied] = useState(false)
 
