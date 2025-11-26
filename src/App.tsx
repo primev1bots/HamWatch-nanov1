@@ -959,7 +959,7 @@ function useAppConfig() {
     miningBaseAmount: 0.00,
     miningMaxAmount: 0,
     miningDuration: 60000,
-    botUsername: 'use_bot'
+    botUsername: 'use_bot' // Add this default value
   });
   const [loading, setLoading] = useState(true);
 
@@ -3639,18 +3639,18 @@ const FriendsTab = () => {
   const { walletConfig } = useWalletConfig()
   const { appConfig } = useAppConfig() // Get app config which includes botUsername
   useReferralEarningsTracker() // Track referral earnings
-  useUserActivity() // Track user activity
+  useUserActivity() // Track user activity - NOW THIS EXISTS
   const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user
 
   const referUrl = useMemo(() => {
     if (typeof window === 'undefined' || !tgUser?.id) {
       // Use botUsername from appConfig or fallback to default
-      const botUsername = appConfig.botUsername || ''
+      const botUsername = appConfig.botUsername || 'use_bot' // NOW THIS PROPERTY EXISTS
       return `https://t.me/${botUsername}?start=default`
     }
     
     // Use botUsername from appConfig or fallback to default
-    const botUsername = appConfig.botUsername || ''
+    const botUsername = appConfig.botUsername || 'use_bot' // NOW THIS PROPERTY EXISTS
     return `https://t.me/${botUsername}?start=${tgUser.id}`
   }, [tgUser?.id, appConfig.botUsername]) // Add appConfig.botUsername to dependencies
 
