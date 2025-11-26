@@ -23,7 +23,6 @@ const firebaseConfig = {
   appId: "1:868246294583:web:70da61aadda9b1ed4defb2",
   measurementId: "G-20Z4Q1H7D9"
 };
-
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
@@ -74,7 +73,7 @@ declare global {
   }
 }
 
-// User Data Types with total ads count
+// User Data Types based on your structure
 interface UserData {
   telegramId: number;
   username?: string;
@@ -85,7 +84,6 @@ interface UserData {
   totalWithdrawn: number;
   joinDate: string;
   adsWatchedToday: number;
-  totalAdsWatched: number; // NEW: Total lifetime ads watched
   tasksCompleted: {
     [taskId: string]: {
       completedAt: string;
@@ -106,7 +104,6 @@ interface UserData {
   lastAdWatch?: string;
   deviceId?: string;
   isMainAccount?: boolean;
-  lastActive: string; // NEW: Track user activity
 }
 
 interface ReferralData {
@@ -156,8 +153,8 @@ interface Task {
   inviteLink?: string;
 }
 
-// Ad Types - ADDED Monetag
-type Provider = 'gigapub' | 'adsovio' | 'adextra' | 'onclicka' | 'monetag';
+// Ad Types
+type Provider = 'gigapub' | 'adsovio' | 'adextra' | 'onclicka';
 
 interface Ad {
   id: number;
@@ -201,7 +198,7 @@ interface VPNConfig {
   allowedCountries: string[];
 }
 
-// App Configuration from Admin Panel with mining values
+// App Configuration from Admin Panel
 interface AppConfig {
   logoUrl: string;
   appName: string;
@@ -212,8 +209,6 @@ interface AppConfig {
   miningBaseAmount: number;
   miningMaxAmount: number;
   miningDuration: number;
-  monetagAppId: string; // NEW: Monetag app ID from database
-  botUsername: string;
 }
 
 interface SliderImage {
@@ -253,14 +248,6 @@ interface DeviceRestrictions {
   enabled: boolean;
   lastUpdated: string;
   updatedBy: string;
-}
-
-// Active Users Tracking
-interface ActiveUsersStats {
-  totalUsers: number;
-  active24h: number;
-  active7d: number;
-  lastUpdated: string;
 }
 
 // Tab Context
@@ -306,64 +293,6 @@ const generateDeviceId = (): string => {
 
   return `device_${Math.abs(hash).toString(36)}`;
 };
-
-// Active Users Tracking Hook
-function useActiveUsers() {
-  const [activeUsers, setActiveUsers] = useState<ActiveUsersStats>({
-    totalUsers: 0,
-    active24h: 0,
-    active7d: 0,
-    lastUpdated: new Date().toISOString()
-  });
-
-  useEffect(() => {
-    const statsRef = ref(db, 'activeUsersStats');
-    
-    const unsubscribe = onValue(statsRef, (snapshot) => {
-      if (snapshot.exists()) {
-        setActiveUsers(snapshot.val());
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  return { activeUsers };
-}
-
-// Update user activity when component mounts
-function useUserActivity() {
-  const { userData } = useUserData();
-
-  useEffect(() => {
-    if (!userData?.telegramId) return;
-
-    const updateActivity = async () => {
-      const userRef = ref(db, `users/${userData.telegramId}`);
-      const now = new Date().toISOString();
-      
-      await update(userRef, {
-        lastActive: now
-      });
-
-      // Update active users stats
-      const statsRef = ref(db, 'activeUsersStats');
-      const statsSnapshot = await get(statsRef);
-      const currentStats = statsSnapshot.exists() ? statsSnapshot.val() : { totalUsers: 0, active24h: 0, active7d: 0 };
-      
-      // This would be more sophisticated in a real implementation
-      // For now, we'll just increment active24h when user is active
-      await update(statsRef, {
-        totalUsers: currentStats.totalUsers,
-        active24h: currentStats.active24h + 1,
-        active7d: currentStats.active7d,
-        lastUpdated: now
-      });
-    };
-
-    updateActivity();
-  }, [userData?.telegramId]);
-}
 
 // Device Management Hook
 function useDeviceManagement() {
@@ -780,7 +709,7 @@ const SplashScreen: React.FC<SplashScreenProps> = ({
   );
 };
 
-// Firebase Hooks with total ads tracking
+// Firebase Hooks
 function useUserData() {
   const [userData, setUserData] = useState<UserData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -820,7 +749,7 @@ function useUserData() {
         const startParam = new URLSearchParams(window.Telegram.WebApp.initData).get('start')
         const referredBy = startParam && startParam !== 'default' ? startParam : undefined
         
-        // Create new user with enhanced structure
+        // Create new user with your structure
         const today = new Date().toISOString().split('T')[0];
         const newUser: UserData = {
           telegramId: tgUser.id,
@@ -832,7 +761,6 @@ function useUserData() {
           totalWithdrawn: 0,
           joinDate: new Date().toISOString(),
           adsWatchedToday: 0,
-          totalAdsWatched: 0, // NEW: Initialize total ads watched
           tasksCompleted: {},
           referredBy: referredBy,
           referral: {
@@ -841,8 +769,7 @@ function useUserData() {
           },
           stats: {
             [today]: { ads: 0, earned: 0 }
-          },
-          lastActive: new Date().toISOString() // NEW: Track last activity
+          }
         }
 
         // Check device restrictions before creating new user
@@ -1020,10 +947,10 @@ function usePaymentMethods() {
   return { paymentMethods, loading };
 }
 
-// App Configuration Hook with mining values and monetag
+// App Configuration Hook
 function useAppConfig() {
   const [appConfig, setAppConfig] = useState<AppConfig>({
-     logoUrl: '',
+    logoUrl: '',
     appName: 'NanoV1',
     sliderImages: [],
     supportUrl: 'https://t.me/nan0v1_support',
@@ -1031,9 +958,7 @@ function useAppConfig() {
     referralCommissionRate: 10,
     miningBaseAmount: 0.00,
     miningMaxAmount: 0,
-    miningDuration: 60000,
-    monetagAppId: '',
-    botUsername: 'use_bot' // ADD THIS LINE
+    miningDuration: 60000
   });
   const [loading, setLoading] = useState(true);
 
@@ -1043,12 +968,7 @@ function useAppConfig() {
     const unsubscribe = onValue(configRef, (snapshot) => {
       if (snapshot.exists()) {
         const configData = snapshot.val();
-        setAppConfig({
-          // Keep existing defaults as fallback
-          ...appConfig,
-          // Override with database values
-          ...configData
-        });
+        setAppConfig(configData);
       }
       setLoading(false);
     });
@@ -1161,7 +1081,7 @@ function useEarningsTransactions() {
   }, [transactions])
 }
 
-// Persistent Mining Hook with database values
+// Persistent Mining Hook
 function usePersistentMining() {
   const { userData } = useUserData()
   const { appConfig } = useAppConfig()
@@ -1223,11 +1143,11 @@ function usePersistentMining() {
     
     const now = Date.now()
     const elapsed = now - miningData.startTime
-    const miningDuration = appConfig.miningDuration || 60000
+    const miningDuration = appConfig.miningDuration || 60000 // 1 minute default
     
     if (elapsed < miningDuration) return 0
     
-    // Calculate reward based on elapsed time and config from database
+    // Calculate reward based on elapsed time and config
     const baseAmount = appConfig.miningBaseAmount || 0.00
     const maxAmount = appConfig.miningMaxAmount || 0
     
@@ -1584,8 +1504,6 @@ const HomeTab: React.FC = () => {
   const { userData, updateUser, addTransaction } = useUserData()
   const { referralData } = useReferralData()
   const { walletConfig } = useWalletConfig()
-  const { appConfig } = useAppConfig() // Get app config for mining values
-  useUserActivity() // Track user activity
   const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user
 
   const {
@@ -1601,15 +1519,6 @@ const HomeTab: React.FC = () => {
   const currentAmount = getCurrentAmount()
   const { parts } = useMiningCountdown(remainingTime)
 
-  // Debug logging to see actual mining values from database
-  useEffect(() => {
-    console.log('Mining Config from Database:', {
-      baseAmount: appConfig.miningBaseAmount,
-      maxAmount: appConfig.miningMaxAmount,
-      duration: appConfig.miningDuration
-    })
-  }, [appConfig])
-
   // libtl.com rewarded ad setup
   const [showingAd, setShowingAd] = useState(false)
   const [libtlLoaded, setLibtlLoaded] = useState(false)
@@ -1619,8 +1528,8 @@ const HomeTab: React.FC = () => {
     const script = document.createElement('script')
     script.src = '//libtl.com/sdk.js'
     script.async = true
-    script.setAttribute('data-zone', '10209973')
-    script.setAttribute('data-sdk', 'show_10209973')
+    script.setAttribute('data-zone', '10160965')
+    script.setAttribute('data-sdk', 'show_10160965')
     
     script.onload = () => {
       console.log('libtl SDK loaded successfully')
@@ -1646,7 +1555,7 @@ const HomeTab: React.FC = () => {
   const showRewardedAd = async (): Promise<boolean> => {
     return new Promise((resolve) => {
       try {
-        const showAdFunction = (window as any).show_10209973
+        const showAdFunction = (window as any).show_10160965
         if (typeof showAdFunction === 'function') {
           // libtl SDK function - we assume it returns a promise or uses callbacks
           const result = showAdFunction()
@@ -3559,7 +3468,6 @@ const EarnTab = () => {
   const [showHistory, setShowHistory] = useState(false)
   const { userData, updateUser, addTransaction } = useUserData()
   useWalletConfig()
-  useUserActivity() // Track user activity
 
   // FIXED: Enhanced task completion handler
   const handleCompleteTask = async (taskId: string, reward: number): Promise<boolean> => {
@@ -3705,22 +3613,14 @@ const FriendsTab = () => {
   useUserData()
   const { referralData } = useReferralData()
   const { walletConfig } = useWalletConfig()
-  const { appConfig } = useAppConfig() // Get app config which includes botUsername
+  const { appConfig } = useAppConfig()
   useReferralEarningsTracker() // Track referral earnings
-  useUserActivity() // Track user activity
   const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user
 
   const referUrl = useMemo(() => {
-    if (typeof window === 'undefined' || !tgUser?.id) {
-      // Use botUsername from appConfig or fallback to default
-      const botUsername = appConfig.botUsername || 'PayCash26_bot'
-      return `https://t.me/${botUsername}?start=default`
-    }
-    
-    // Use botUsername from appConfig or fallback to default
-    const botUsername = appConfig.botUsername || 'PayCash26_bot'
-    return `https://t.me/${botUsername}?start=${tgUser.id}`
-  }, [tgUser?.id, appConfig.botUsername]) // Add appConfig.botUsername to dependencies
+    if (typeof window === 'undefined' || !tgUser?.id) return 'https://t.me/HamWatch_Bot?start=default'
+    return `https://t.me/HamWatch_Bot?start=${tgUser.id}`
+  }, [tgUser?.id])
 
   const [copied, setCopied] = useState(false)
 
@@ -3938,7 +3838,6 @@ function ProfileHeader({ onOpenWallet }: { onOpenWallet: () => void }) {
   const { referralData } = useReferralData()
   const { walletConfig } = useWalletConfig()
   useAppConfig()
-  useUserActivity() // Track user activity
   const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user
 
   const user = {
@@ -4043,7 +3942,6 @@ const ProfileTab = () => {
   const { paymentMethods } = usePaymentMethods()
   const { appConfig } = useAppConfig()
   const walletTransactions = useWalletTransactions()
-  useUserActivity() // Track user activity
 
   const [page, setPage] = useState(1)
   const totalPages = Math.max(1, Math.ceil(walletTransactions.length / TX_PAGE_SIZE))
@@ -4484,7 +4382,6 @@ const ProfileTab = () => {
 export default function HomePage() {
   const { userData, loading } = useUserData();
   const { getMainAccount, deviceRestrictions, isCheckingDevice } = useDeviceManagement();
-  useActiveUsers(); // Get active users stats
   const [showDeviceLimitScreen, setShowDeviceLimitScreen] = useState(false);
 
   useEffect(() => {
@@ -4551,4 +4448,4 @@ export default function HomePage() {
       </TabProvider>
     </>
   )
-}   
+}
