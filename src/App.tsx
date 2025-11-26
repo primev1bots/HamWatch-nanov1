@@ -958,7 +958,8 @@ function useAppConfig() {
     referralCommissionRate: 10,
     miningBaseAmount: 0.00,
     miningMaxAmount: 0,
-    miningDuration: 60000
+    miningDuration: 60000,
+    botUsername: 'use_bot'
   });
   const [loading, setLoading] = useState(true);
 
