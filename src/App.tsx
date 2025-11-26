@@ -104,6 +104,7 @@ interface UserData {
   lastAdWatch?: string;
   deviceId?: string;
   isMainAccount?: boolean;
+  lastActive?: number;
 }
 
 interface ReferralData {
@@ -209,6 +210,7 @@ interface AppConfig {
   miningBaseAmount: number;
   miningMaxAmount: number;
   miningDuration: number;
+  botUsername: string;
 }
 
 interface SliderImage {
@@ -959,7 +961,7 @@ function useAppConfig() {
     miningBaseAmount: 0.00,
     miningMaxAmount: 0,
     miningDuration: 60000,
-    botUsername: 'use_bot' // Add this default value
+    botUsername: 'use_bot'
   });
   const [loading, setLoading] = useState(true);
 
@@ -978,6 +980,31 @@ function useAppConfig() {
   }, []);
 
   return { appConfig, loading };
+}
+
+// User Activity Tracking Hook
+function useUserActivity() {
+  const { userData } = useUserData();
+
+  useEffect(() => {
+    if (!userData?.telegramId) return;
+
+    // Update last active timestamp every 30 seconds
+    const interval = setInterval(() => {
+      const userRef = ref(db, `users/${userData.telegramId}`);
+      update(userRef, {
+        lastActive: Date.now()
+      });
+    }, 30000);
+
+    // Initial update
+    const userRef = ref(db, `users/${userData.telegramId}`);
+    update(userRef, {
+      lastActive: Date.now()
+    });
+
+    return () => clearInterval(interval);
+  }, [userData?.telegramId]);
 }
 
 // Enhanced hook to track referral earnings from referred users' activities
@@ -3639,18 +3666,18 @@ const FriendsTab = () => {
   const { walletConfig } = useWalletConfig()
   const { appConfig } = useAppConfig() // Get app config which includes botUsername
   useReferralEarningsTracker() // Track referral earnings
-  useUserActivity() // Track user activity - NOW THIS EXISTS
+  useUserActivity() // Track user activity
   const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user
 
   const referUrl = useMemo(() => {
     if (typeof window === 'undefined' || !tgUser?.id) {
       // Use botUsername from appConfig or fallback to default
-      const botUsername = appConfig.botUsername || 'use_bot' // NOW THIS PROPERTY EXISTS
+      const botUsername = appConfig.botUsername || 'use_bot'
       return `https://t.me/${botUsername}?start=default`
     }
     
     // Use botUsername from appConfig or fallback to default
-    const botUsername = appConfig.botUsername || 'use_bot' // NOW THIS PROPERTY EXISTS
+    const botUsername = appConfig.botUsername || 'use_bot'
     return `https://t.me/${botUsername}?start=${tgUser.id}`
   }, [tgUser?.id, appConfig.botUsername]) // Add appConfig.botUsername to dependencies
 
