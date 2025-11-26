@@ -2539,13 +2539,13 @@ const DailyTasks: React.FC<DailyTasksProps> = ({
   );
 };
 
-// Enhanced AdsDashboard with proper AdExtra integration
+// Enhanced AdsDashboard with proper AdExtra integration and Firebase app IDs
 const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) => {
   const [ads, setAds] = React.useState<Ad[]>([
-    { id: 1, title: 'Ads1', description: '', watched: 0, dailyLimit: 5, hourlyLimit: 2, provider: 'gigapub', waitTime: 5, cooldown: 60, reward: 0.5, enabled: true, appId: '4338' },
-    { id: 2, title: 'Ads2', description: '', watched: 0, dailyLimit: 5, hourlyLimit: 2, provider: 'onclicka', waitTime: 5, cooldown: 60, reward: 0.5, enabled: true, appId: '6098415' },
-    { id: 3, title: 'Ads3', description: '', watched: 0, dailyLimit: 5, hourlyLimit: 2, provider: 'adsovio', waitTime: 5, cooldown: 60, reward: 0.5, enabled: true, appId: '7721' },
-    { id: 4, title: 'Ads4', description: '', watched: 0, dailyLimit: 5, hourlyLimit: 2, provider: 'adextra', waitTime: 5, cooldown: 60, reward: 0.5, enabled: true, appId: 'STATIC_FROM_INDEX_HTML' },
+    { id: 1, title: 'Ads1', description: '', watched: 0, dailyLimit: 5, hourlyLimit: 2, provider: 'gigapub', waitTime: 5, cooldown: 60, reward: 0.5, enabled: false, appId: '' },
+    { id: 2, title: 'Ads2', description: '', watched: 0, dailyLimit: 5, hourlyLimit: 2, provider: 'onclicka', waitTime: 5, cooldown: 60, reward: 0.5, enabled: false, appId: '' },
+    { id: 3, title: 'Ads3', description: '', watched: 0, dailyLimit: 5, hourlyLimit: 2, provider: 'adsovio', waitTime: 5, cooldown: 60, reward: 0.5, enabled: false, appId: '' },
+    { id: 4, title: 'Ads4', description: '', watched: 0, dailyLimit: 5, hourlyLimit: 2, provider: 'adextra', waitTime: 5, cooldown: 60, reward: 0.5, enabled: false, appId: '' },
   ]);
 
   const [isWatchingAd, setIsWatchingAd] = React.useState<number | null>(null);
@@ -2583,6 +2583,7 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
     const utc = now.getTime() + now.getTimezoneOffset() * 60000;
     return new Date(utc + 3600000 * 6);
   };
+
   const formatDate = (date: Date): string => date.toISOString().split('T')[0];
 
   // Firebase helpers
@@ -2610,54 +2611,54 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
         const referredUserSnapshot = await get(referredUserRef);
         if (!referredUserSnapshot.exists()) return false;
 
-        const referredUser = referredUserSnapshot.val() as UserData;
-        const referrerId = referredUser.referredBy;
-        if (!referrerId) return false;
-
-        const commission = earnedAmount * (commissionRate / 100);
-        const referrerRef = ref(db, `users/${referrerId}`);
-        const referrerSnapshot = await get(referrerRef);
-        if (!referrerSnapshot.exists()) return false;
-
-        const referrer = referrerSnapshot.val() as UserData;
-        const newBalance = (referrer.balance || 0) + commission;
-        const newTotalEarned = (referrer.totalEarned || 0) + commission;
-        await update(referrerRef, { balance: newBalance, totalEarned: newTotalEarned });
-
-        const referralRef = ref(db, `referrals/${referrerId}`);
-        const referralSnapshot = await get(referralRef);
-        if (referralSnapshot.exists()) {
-          const data = referralSnapshot.val() as any;
-          if (!data.referredUsers) data.referredUsers = {};
-          if (data.referredUsers[referredUserId]) {
-            data.referredUsers[referredUserId].totalEarned += earnedAmount;
-            data.referredUsers[referredUserId].commissionEarned += commission;
-          } else {
-            data.referredUsers[referredUserId] = {
-              joinedAt: new Date().toISOString(),
-              totalEarned: earnedAmount,
-              commissionEarned: commission,
-            };
-          }
-          data.referralEarnings = (data.referralEarnings || 0) + commission;
-          data.referredCount = Object.keys(data.referredUsers).length;
-          await set(referralRef, data);
-        }
-
-        await firebaseRequest.addTransaction({
-          userId: referrerId.toString(),
-          type: 'referral_commission',
-          amount: commission,
-          description: `${commissionRate}% commission from referral ${referredUser.firstName || referredUser.username}`,
-          status: 'completed',
-          createdAt: new Date().toISOString(),
-        });
-
-        return true;
-      } catch (e) {
-        console.error('Error adding referral commission:', e);
-        return false;
-      }
+        const referredUser = referredUserSnapshot.val() as UserData;      
+        const referrerId = referredUser.referredBy;      
+        if (!referrerId) return false;      
+  
+        const commission = earnedAmount * (commissionRate / 100);      
+        const referrerRef = ref(db, `users/${referrerId}`);      
+        const referrerSnapshot = await get(referrerRef);      
+        if (!referrerSnapshot.exists()) return false;      
+  
+        const referrer = referrerSnapshot.val() as UserData;      
+        const newBalance = (referrer.balance || 0) + commission;      
+        const newTotalEarned = (referrer.totalEarned || 0) + commission;      
+        await update(referrerRef, { balance: newBalance, totalEarned: newTotalEarned });      
+  
+        const referralRef = ref(db, `referrals/${referrerId}`);      
+        const referralSnapshot = await get(referralRef);      
+        if (referralSnapshot.exists()) {      
+          const data = referralSnapshot.val() as any;      
+          if (!data.referredUsers) data.referredUsers = {};      
+          if (data.referredUsers[referredUserId]) {      
+            data.referredUsers[referredUserId].totalEarned += earnedAmount;      
+            data.referredUsers[referredUserId].commissionEarned += commission;      
+          } else {      
+            data.referredUsers[referredUserId] = {      
+              joinedAt: new Date().toISOString(),      
+              totalEarned: earnedAmount,      
+              commissionEarned: commission,      
+            };      
+          }      
+          data.referralEarnings = (data.referralEarnings || 0) + commission;      
+          data.referredCount = Object.keys(data.referredUsers).length;      
+          await set(referralRef, data);      
+        }      
+  
+        await firebaseRequest.addTransaction({      
+          userId: referrerId.toString(),      
+          type: 'referral_commission',      
+          amount: commission,      
+          description: `${commissionRate}% commission from referral ${referredUser.firstName || referredUser.username}`,      
+          status: 'completed',      
+          createdAt: new Date().toISOString(),      
+        });      
+  
+        return true;      
+      } catch (e) {      
+        console.error('Error adding referral commission:', e);      
+        return false;      
+      }      
     },
   };
 
@@ -2672,24 +2673,24 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
       const currentHour = bdTime.getHours();
       const shouldReset = currentHour >= 6 && lastReset !== today;
 
-      if (shouldReset) {
-        await set(resetRef, today);
-        const usersAdsRef = ref(db, 'userAds');
-        const usersSnapshot = await get(usersAdsRef);
-        if (usersSnapshot.exists()) {
-          const usersData = usersSnapshot.val();
-          const updates: any = {};
-          Object.keys(usersData).forEach((uid) => {
-            Object.keys(usersData[uid]).forEach((provider) => {
-              updates[`userAds/${uid}/${provider}/watchedToday`] = 0;
-              updates[`userAds/${uid}/${provider}/lastReset`] = new Date().toISOString();
-            });
-          });
-          if (Object.keys(updates).length > 0) await update(ref(db), updates);
-        }
-      }
-    } catch (e) {
-      console.error('Daily reset check failed:', e);
+      if (shouldReset) {      
+        await set(resetRef, today);      
+        const usersAdsRef = ref(db, 'userAds');      
+        const usersSnapshot = await get(usersAdsRef);      
+        if (usersSnapshot.exists()) {      
+          const usersData = usersSnapshot.val();      
+          const updates: any = {};      
+          Object.keys(usersData).forEach((uid) => {      
+            Object.keys(usersData[uid]).forEach((provider) => {      
+              updates[`userAds/${uid}/${provider}/watchedToday`] = 0;      
+              updates[`userAds/${uid}/${provider}/lastReset`] = new Date().toISOString();      
+            });      
+          });      
+          if (Object.keys(updates).length > 0) await update(ref(db), updates);      
+        }      
+      }      
+    } catch (e) {      
+      console.error('Daily reset check failed:', e);      
     }
   }, []);
 
@@ -2700,22 +2701,22 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
       resetTime.setHours(6, 0, 0, 0);
       if (bdTime.getTime() >= resetTime.getTime()) resetTime.setDate(resetTime.getDate() + 1);
 
-      const diff = resetTime.getTime() - bdTime.getTime();
-      const hours = Math.floor(diff / 3600000);
-      const minutes = Math.floor((diff % 3600000) / 60000);
-      const seconds = Math.floor((diff % 60000) / 1000);
-      setTimeUntilReset(
-        `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-      );
-    };
-
-    checkAndPerformDailyReset();
-    updateResetTime();
-    const t = setInterval(updateResetTime, 1000);
-    const r = setInterval(checkAndPerformDailyReset, 60000);
-    return () => {
-      clearInterval(t);
-      clearInterval(r);
+      const diff = resetTime.getTime() - bdTime.getTime();      
+      const hours = Math.floor(diff / 3600000);      
+      const minutes = Math.floor((diff % 3600000) / 60000);      
+      const seconds = Math.floor((diff % 60000) / 1000);      
+      setTimeUntilReset(      
+        `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`      
+      );      
+    };      
+  
+    checkAndPerformDailyReset();      
+    updateResetTime();      
+    const t = setInterval(updateResetTime, 1000);      
+    const r = setInterval(checkAndPerformDailyReset, 60000);      
+    return () => {      
+      clearInterval(t);      
+      clearInterval(r);      
     };
   }, [checkAndPerformDailyReset]);
 
@@ -2723,32 +2724,56 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
   React.useEffect(() => {
     const adsRef = ref(db, 'ads');
     const unsubscribe = onValue(adsRef, (snapshot) => {
-      if (!snapshot.exists()) return;
+      if (!snapshot.exists()) {
+        console.log('No ads configuration found in Firebase');
+        return;
+      }
+      
       const adsData: Record<string, any> = snapshot.val();
+      console.log('Loaded ads config from Firebase:', adsData);
+      
       setAds((prev) =>
         prev.map((ad) => {
           const cfg = adsData[ad.provider];
-          if (!cfg) return ad;
+          if (!cfg) {
+            console.log(`No config found for provider: ${ad.provider}`);
+            return { ...ad, enabled: false };
+          }
+          
+          // Check if appId exists and provider is enabled
+          const hasAppId = cfg.appId && cfg.appId.trim() !== '';
+          const isEnabled = cfg.enabled !== false && hasAppId;
+          
           return {
             ...ad,
             reward: cfg.reward ?? ad.reward,
             dailyLimit: cfg.dailyLimit ?? ad.dailyLimit,
             hourlyLimit: cfg.hourlyLimit ?? ad.hourlyLimit,
             cooldown: cfg.cooldown ?? ad.cooldown,
-            enabled: cfg.enabled !== false,
+            enabled: isEnabled,
             waitTime: cfg.waitTime ?? ad.waitTime,
-            appId: cfg.appId ?? ad.appId,
+            appId: cfg.appId ?? '',
             description: `${walletConfig.currency} ${cfg.reward ?? ad.reward} per ad`,
           };
         })
       );
+      
+      // Reset script initialization when config changes
       setScriptsInitialized((prev) => ({
         ...prev,
         gigapub: false,
         onclicka: false,
         adsovio: false,
       }));
+      
+      setScriptLoaded((prev) => ({
+        ...prev,
+        gigapub: false,
+        onclicka: false,
+        adsovio: false,
+      }));
     });
+    
     return () => unsubscribe();
   }, [walletConfig.currency]);
 
@@ -2759,25 +2784,25 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
     const unsubscribe = onValue(userAdsRef, (snapshot) => {
       if (!snapshot.exists()) return;
 
-      const userAdsData = snapshot.val();
-      const newLastWatched: Record<string, Date> = {};
-      const bdTime = getBangladeshTime();
-      const today = formatDate(bdTime);
-
-      setAds((prev) =>
-        prev.map((ad) => {
-          const pData = userAdsData[ad.provider];
-          if (pData?.lastWatched) newLastWatched[ad.provider] = new Date(pData.lastWatched);
-
-          let watchedToday = pData?.watchedToday || 0;
-          const lastReset = pData?.lastReset;
-          if (lastReset && formatDate(new Date(lastReset)) !== today) watchedToday = 0;
-
-          return { ...ad, watched: watchedToday, lastWatched: pData?.lastWatched ? new Date(pData.lastWatched) : undefined };
-        })
-      );
-      setLastWatched(newLastWatched);
-    });
+      const userAdsData = snapshot.val();      
+      const newLastWatched: Record<string, Date> = {};      
+      const bdTime = getBangladeshTime();      
+      const today = formatDate(bdTime);      
+  
+      setAds((prev) =>      
+        prev.map((ad) => {      
+          const pData = userAdsData[ad.provider];      
+          if (pData?.lastWatched) newLastWatched[ad.provider] = new Date(pData.lastWatched);      
+  
+          let watchedToday = pData?.watchedToday || 0;      
+          const lastReset = pData?.lastReset;      
+          if (lastReset && formatDate(new Date(lastReset)) !== today) watchedToday = 0;      
+  
+          return { ...ad, watched: watchedToday, lastWatched: pData?.lastWatched ? new Date(pData.lastWatched) : undefined };      
+        })      
+      );      
+      setLastWatched(newLastWatched);      
+    });      
     return () => unsubscribe();
   }, [userData?.telegramId]);
 
@@ -2797,58 +2822,14 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
     return () => clearInterval(iv);
   }, [lastWatched, ads]);
 
-  // Onclicka initialization
-  useEffect(() => {
-    const loadOnclickaScript = () => {
-      if (document.getElementById('onclicka-script')) {
-        console.log('Onclicka script already loaded');
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.id = 'onclicka-script';
-      script.src = 'https://js.onclckvd.com/in-stream-ad-admanager/tma.js';
-      script.async = true;
-      
-      script.onload = async () => {
-        console.log('Onclicka script loaded successfully');
-        
-        try {
-          if (window.initCdTma) {
-            const show = await window.initCdTma({ id: "6098415" });
-            window.showAd = show;
-            setScriptLoaded(prev => ({ ...prev, onclicka: typeof window.showAd === 'function' }));
-            console.log('Onclicka initialized successfully');
-          } else {
-            console.error('initCdTma not defined after script load');
-            setScriptLoaded(prev => ({ ...prev, onclicka: false }));
-          }
-        } catch (error) {
-          console.error('Onclicka initialization error:', error);
-          setScriptLoaded(prev => ({ ...prev, onclicka: false }));
-        }
-      };
-      
-      script.onerror = () => {
-        console.error('Failed to load Onclicka script');
-        setScriptLoaded(prev => ({ ...prev, onclicka: false }));
-      };
-      
-      document.head.appendChild(script);
-    };
-
-    // Only load if there's an Onclicka ad enabled
-    const onclickaAd = ads.find(ad => ad.provider === 'onclicka' && ad.enabled);
-    if (onclickaAd && !scriptLoaded.onclicka) {
-      loadOnclickaScript();
-    }
-  }, [ads, scriptLoaded.onclicka]);
-
-  // Initialize other ad provider scripts
+  // Initialize ad provider scripts
   React.useEffect(() => {
     const initScripts = () => {
       ads.forEach((ad) => {
-        if (!ad.enabled || scriptsInitialized[ad.provider]) return;
+        // Only initialize if ad is enabled AND has a valid appId
+        if (!ad.enabled || !ad.appId || scriptsInitialized[ad.provider]) return;
+
+        console.log(`Initializing ${ad.provider} with appId: ${ad.appId}`);
         
         switch (ad.provider) {
           case 'gigapub': {
@@ -2858,14 +2839,50 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
               s.src = `https://ad.gigapub.tech/script?id=${ad.appId}`;
               s.async = true;
               s.onload = () => {
+                console.log('Gigapub script loaded');
                 setScriptLoaded((p) => ({ ...p, gigapub: typeof window.showGiga === 'function' }));
                 setScriptsInitialized((p) => ({ ...p, gigapub: true }));
               };
-              s.onerror = () => setScriptsInitialized((p) => ({ ...p, gigapub: true }));
+              s.onerror = () => {
+                console.error('Gigapub script failed to load');
+                setScriptsInitialized((p) => ({ ...p, gigapub: true }));
+              };
               document.head.appendChild(s);
             } else {
               setScriptLoaded((p) => ({ ...p, gigapub: true }));
               setScriptsInitialized((p) => ({ ...p, gigapub: true }));
+            }
+            break;
+          }
+          case 'onclicka': {
+            if (!document.getElementById('onclicka-script')) {
+              const s = document.createElement('script');
+              s.id = 'onclicka-script';
+              s.src = 'https://js.onclckvd.com/in-stream-ad-admanager/tma.js';
+              s.async = true;
+              s.onload = async () => {
+                console.log('Onclicka script loaded');
+                try {
+                  if (window.initCdTma) {
+                    const show = await window.initCdTma({ id: ad.appId });
+                    window.showAd = show;
+                    setScriptLoaded(prev => ({ ...prev, onclicka: typeof window.showAd === 'function' }));
+                    console.log('Onclicka initialized successfully with appId:', ad.appId);
+                  } else {
+                    console.error('initCdTma not defined after script load');
+                    setScriptLoaded(prev => ({ ...prev, onclicka: false }));
+                  }
+                } catch (error) {
+                  console.error('Onclicka initialization error:', error);
+                  setScriptLoaded(prev => ({ ...prev, onclicka: false }));
+                }
+                setScriptsInitialized((p) => ({ ...p, onclicka: true }));
+              };
+              s.onerror = () => {
+                console.error('Onclicka script failed to load');
+                setScriptsInitialized((p) => ({ ...p, onclicka: true }));
+              };
+              document.head.appendChild(s);
             }
             break;
           }
@@ -2876,10 +2893,14 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
               s.src = `https://adsovio.com/cdn/ads.js?app_uid=${ad.appId}`;
               s.async = true;
               s.onload = () => {
+                console.log('Adsovio script loaded');
                 setScriptLoaded((p) => ({ ...p, adsovio: typeof window.showAdsovio === 'function' }));
                 setScriptsInitialized((p) => ({ ...p, adsovio: true }));
               };
-              s.onerror = () => setScriptsInitialized((p) => ({ ...p, adsovio: true }));
+              s.onerror = () => {
+                console.error('Adsovio script failed to load');
+                setScriptsInitialized((p) => ({ ...p, adsovio: true }));
+              };
               document.head.appendChild(s);
             } else {
               setScriptLoaded((p) => ({ ...p, adsovio: true }));
@@ -2889,6 +2910,7 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
           }
           case 'adextra': {
             // AdExtra is expected to be included in index.html and exposes window.p_adextra
+            console.log('AdExtra configured with appId:', ad.appId);
             setScriptLoaded((p) => ({ ...p, adextra: typeof window.p_adextra === 'function' || p.adextra }));
             setScriptsInitialized((p) => ({ ...p, adextra: true }));
             break;
@@ -2896,6 +2918,7 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
         }
       });
     };
+    
     initScripts();
   }, [ads, scriptsInitialized]);
 
@@ -2904,12 +2927,12 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
     const ad = ads.find((a) => a.id === adId);
     if (!ad) return;
 
-    const userAdRef = ref(db, `userAds/${userData.telegramId}/${ad.provider}`);
-    const now = new Date().toISOString();
-    await update(userAdRef, {
-      watchedToday: (ad.watched || 0) + 1,
-      lastWatched: now,
-      lastUpdated: now,
+    const userAdRef = ref(db, `userAds/${userData.telegramId}/${ad.provider}`);      
+    const now = new Date().toISOString();      
+    await update(userAdRef, {      
+      watchedToday: (ad.watched || 0) + 1,      
+      lastWatched: now,      
+      lastUpdated: now,      
     });
   };
 
@@ -2921,42 +2944,42 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
     const ad = ads.find((a) => a.id === adId);
     if (!ad) return 0;
 
-    try {
-      const now = new Date();
-      const lastWatch = userData.lastAdWatch ? new Date(userData.lastAdWatch) : null;
-      let newAdsWatchedToday = userData.adsWatchedToday || 0;
-      if (lastWatch && lastWatch.toDateString() !== now.toDateString()) newAdsWatchedToday = 0;
-
-      const reward = ad.reward;
-      const newBalance = userData.balance + reward;
-      const newTotalEarned = userData.totalEarned + reward;
-      const newAdsCount = newAdsWatchedToday + 1;
-
-      await updateUser({
-        balance: newBalance,
-        totalEarned: newTotalEarned,
-        adsWatchedToday: newAdsCount,
-        lastAdWatch: now.toISOString(),
-      });
-
-      await addTransaction({
-        userId: userData.telegramId,
-        type: 'ad_reward',
-        amount: reward,
-        description: `Ad watched: ${ad.title}`,
-        timestamp: Date.now(),
-        status: 'completed'
-      });
-
-      if (userData.referredBy) {
-        await firebaseRequest.addReferralCommission(userData.telegramId, reward);
-      }
-
-      return reward;
-    } catch (e) {
-      console.error('recordAdWatch error:', e);
-      showMessage('error', 'Error recording reward.');
-      return 0;
+    try {      
+      const now = new Date();      
+      const lastWatch = userData.lastAdWatch ? new Date(userData.lastAdWatch) : null;      
+      let newAdsWatchedToday = userData.adsWatchedToday || 0;      
+      if (lastWatch && lastWatch.toDateString() !== now.toDateString()) newAdsWatchedToday = 0;      
+  
+      const reward = ad.reward;      
+      const newBalance = userData.balance + reward;      
+      const newTotalEarned = userData.totalEarned + reward;      
+      const newAdsCount = newAdsWatchedToday + 1;      
+  
+      await updateUser({      
+        balance: newBalance,      
+        totalEarned: newTotalEarned,      
+        adsWatchedToday: newAdsCount,      
+        lastAdWatch: now.toISOString(),      
+      });      
+  
+      await addTransaction({      
+        userId: userData.telegramId,      
+        type: 'ad_reward',      
+        amount: reward,      
+        description: `Ad watched: ${ad.title}`,      
+        timestamp: Date.now(),      
+        status: 'completed'      
+      });      
+  
+      if (userData.referredBy) {      
+        await firebaseRequest.addReferralCommission(userData.telegramId, reward);      
+      }      
+  
+      return reward;      
+    } catch (e) {      
+      console.error('recordAdWatch error:', e);      
+      showMessage('error', 'Error recording reward.');      
+      return 0;      
     }
   };
 
@@ -2968,7 +2991,7 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
 
   const formatTime = (sec: number): string => (sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${sec % 60}s`);
 
-  // Enhanced AdExtra handler with proper timeout and error handling (from 2nd code)
+  // Enhanced AdExtra handler with proper timeout and error handling
   const runAdExtra = async (adId: number, ad: Ad) => {
     if (typeof window.p_adextra !== 'function') {
       showMessage('info', 'AdExtra initializing… please try again in a moment');
@@ -2979,45 +3002,45 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
     }
     const timeoutMs = Math.max(15000, ad.waitTime * 1000 + 5000);
 
-    const release = () => {
-      concurrencyLockRef.current = false;
-      setConcurrentLock(false);
-      setIsWatchingAd(null);
-    };
-    const onSuccess = async () => {
-      console.log('AdExtra: Success callback received');
-      await handleAdCompletion(adId);
-      setAds((prev) => prev.map((a) => (a.id === adId ? { ...a, watched: a.watched + 1 } : a)));
-      setLastWatched((prev) => ({ ...prev, [ad.provider]: new Date() }));
-      release();
-    };
-    const onError = () => {
-      console.log('AdExtra: Error callback received');
-      showMessage('error', 'Ad failed or was skipped. Try again.');
-      release();
-    };
-
-    const to = setTimeout(() => {
-      console.warn('AdExtra timed out without callback');
-      onError();
-    }, timeoutMs);
-
-    const wrappedSuccess = () => {
-      clearTimeout(to);
-      onSuccess();
-    };
-    const wrappedError = () => {
-      clearTimeout(to);
-      onError();
-    };
-
-    try {
-      console.log('AdExtra: Calling p_adextra');
-      window.p_adextra(wrappedSuccess, wrappedError);
-    } catch (error) {
-      console.error('AdExtra: Error calling p_adextra', error);
-      clearTimeout(to);
-      onError();
+    const release = () => {      
+      concurrencyLockRef.current = false;      
+      setConcurrentLock(false);      
+      setIsWatchingAd(null);      
+    };      
+    const onSuccess = async () => {      
+      console.log('AdExtra: Success callback received');      
+      await handleAdCompletion(adId);      
+      setAds((prev) => prev.map((a) => (a.id === adId ? { ...a, watched: a.watched + 1 } : a)));      
+      setLastWatched((prev) => ({ ...prev, [ad.provider]: new Date() }));      
+      release();      
+    };      
+    const onError = () => {      
+      console.log('AdExtra: Error callback received');      
+      showMessage('error', 'Ad failed or was skipped. Try again.');      
+      release();      
+    };      
+  
+    const to = setTimeout(() => {      
+      console.warn('AdExtra timed out without callback');      
+      onError();      
+    }, timeoutMs);      
+  
+    const wrappedSuccess = () => {      
+      clearTimeout(to);      
+      onSuccess();      
+    };      
+    const wrappedError = () => {      
+      clearTimeout(to);      
+      onError();      
+    };      
+  
+    try {      
+      console.log('AdExtra: Calling p_adextra');      
+      window.p_adextra(wrappedSuccess, wrappedError);      
+    } catch (error) {      
+      console.error('AdExtra: Error calling p_adextra', error);      
+      clearTimeout(to);      
+      onError();      
     }
   };
 
@@ -3031,21 +3054,21 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
       return;
     }
 
-    try {
-      showMessage('info', 'Loading Onclicka...');
-      
-      await window.showAd();
-      await handleAdCompletion(adId);
-      setAds((prev) => prev.map((a) => (a.id === adId ? { ...a, watched: a.watched + 1 } : a)));
-      setLastWatched((prev) => ({ ...prev, [ad.provider]: new Date() }));
-      showMessage('success', `Onclicka completed! You earned ${walletConfig.currencySymbol}${ad.reward}`);
-    } catch (error) {
-      console.error('Onclicka error:', error);
-      showMessage('error', 'Onclicka failed to load. Please try again later.');
-    } finally {
-      concurrencyLockRef.current = false;
-      setConcurrentLock(false);
-      setIsWatchingAd(null);
+    try {      
+      showMessage('info', 'Loading Onclicka...');      
+        
+      await window.showAd();      
+      await handleAdCompletion(adId);      
+      setAds((prev) => prev.map((a) => (a.id === adId ? { ...a, watched: a.watched + 1 } : a)));      
+      setLastWatched((prev) => ({ ...prev, [ad.provider]: new Date() }));      
+      showMessage('success', `Onclicka completed! You earned ${walletConfig.currencySymbol}${ad.reward}`);      
+    } catch (error) {      
+      console.error('Onclicka error:', error);      
+      showMessage('error', 'Onclicka failed to load. Please try again later.');      
+    } finally {      
+      concurrencyLockRef.current = false;      
+      setConcurrentLock(false);      
+      setIsWatchingAd(null);      
     }
   };
 
@@ -3057,89 +3080,89 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
       return;
     }
 
-    const ad = ads.find((a) => a.id === adId);
-    if (!ad) {
-      showMessage('error', 'Ad not found');
-      return;
-    }
-    if (!ad.enabled) {
-      showMessage('error', 'This ad provider is temporarily unavailable');
-      return;
-    }
-
-    // AdExtra should not wait for dynamic scriptLoaded
-    if (ad.provider !== 'adextra' && !scriptLoaded[ad.provider]) {
-      showMessage('info', 'Ad provider is loading... Please wait a moment');
-      return;
-    }
-
-    const now = new Date();
-    if (ad.dailyLimit > 0 && ad.watched >= ad.dailyLimit) {
-      showMessage('info', 'Daily limit reached. Come back tomorrow!');
-      return;
-    }
-    if (lastWatched[ad.provider]) {
-      const elapsed = (now.getTime() - lastWatched[ad.provider].getTime()) / 1000;
-      if (elapsed < ad.cooldown) {
-        const waitLeft = Math.ceil(ad.cooldown - elapsed);
-        showMessage('info', `Please wait ${formatTime(waitLeft)} before next ad`);
-        return;
-      }
-    }
-
-    // Set concurrency lock
-    concurrencyLockRef.current = true;
-    setConcurrentLock(true);
-    setIsWatchingAd(adId);
-    showMessage('info', 'Preparing ad…');
-
-    try {
-      // Handle different providers
-      if (ad.provider === 'adextra') {
-        await runAdExtra(adId, ad);
-        return;
-      }
-
-      if (ad.provider === 'onclicka') {
-        await runOnclicka(adId, ad);
-        return;
-      }
-
-      // Handle other providers (gigapub, adsovio)
-      const minWaitTime = ad.waitTime;
-      const start = Date.now();
-      let adCompleted = false;
-
-      if (ad.provider === 'gigapub' && window.showGiga) {
-        await window.showGiga(); 
-        adCompleted = true;
-      } else if (ad.provider === 'adsovio' && window.showAdsovio) {
-        await window.showAdsovio(); 
-        adCompleted = true;
-      } else {
-        throw new Error('Ad provider function not available');
-      }
-
-      if (adCompleted) {
-        const elapsed = (Date.now() - start) / 1000;
-        if (elapsed >= minWaitTime) {
-          await handleAdCompletion(adId);
-          setAds((prev) => prev.map((a) => (a.id === adId ? { ...a, watched: a.watched + 1 } : a)));
-          setLastWatched((prev) => ({ ...prev, [ad.provider]: now }));
-        } else {
-          throw new Error(`Please watch the ad completely (minimum ${minWaitTime} seconds)`);
-        }
-      }
-    } catch (e) {
-      console.error('Ad error:', e);
-      showMessage('error', 'Ad was not completed.');
-    } finally {
-      // Only release lock for non-callback providers
-      if (ad?.provider !== 'adextra' && ad?.provider !== 'onclicka') {
-        concurrencyLockRef.current = false;
-        setConcurrentLock(false);
-        setIsWatchingAd(null);
-      }
+    const ad = ads.find((a) => a.id === adId);      
+    if (!ad) {      
+      showMessage('error', 'Ad not found');      
+      return;      
+    }      
+    if (!ad.enabled) {      
+      showMessage('error', 'This ad provider is temporarily unavailable');      
+      return;      
+    }      
+  
+    // AdExtra should not wait for dynamic scriptLoaded      
+    if (ad.provider !== 'adextra' && !scriptLoaded[ad.provider]) {      
+      showMessage('info', 'Ad provider is loading... Please wait a moment');      
+      return;      
+    }      
+  
+    const now = new Date();      
+    if (ad.dailyLimit > 0 && ad.watched >= ad.dailyLimit) {      
+      showMessage('info', 'Daily limit reached. Come back tomorrow!');      
+      return;      
+    }      
+    if (lastWatched[ad.provider]) {      
+      const elapsed = (now.getTime() - lastWatched[ad.provider].getTime()) / 1000;      
+      if (elapsed < ad.cooldown) {      
+        const waitLeft = Math.ceil(ad.cooldown - elapsed);      
+        showMessage('info', `Please wait ${formatTime(waitLeft)} before next ad`);      
+        return;      
+      }      
+    }      
+  
+    // Set concurrency lock      
+    concurrencyLockRef.current = true;      
+    setConcurrentLock(true);      
+    setIsWatchingAd(adId);      
+    showMessage('info', 'Preparing ad…');      
+  
+    try {      
+      // Handle different providers      
+      if (ad.provider === 'adextra') {      
+        await runAdExtra(adId, ad);      
+        return;      
+      }      
+  
+      if (ad.provider === 'onclicka') {      
+        await runOnclicka(adId, ad);      
+        return;      
+      }      
+  
+      // Handle other providers (gigapub, adsovio)      
+      const minWaitTime = ad.waitTime;      
+      const start = Date.now();      
+      let adCompleted = false;      
+  
+      if (ad.provider === 'gigapub' && window.showGiga) {      
+        await window.showGiga();       
+        adCompleted = true;      
+      } else if (ad.provider === 'adsovio' && window.showAdsovio) {      
+        await window.showAdsovio();       
+        adCompleted = true;      
+      } else {      
+        throw new Error('Ad provider function not available');      
+      }      
+  
+      if (adCompleted) {      
+        const elapsed = (Date.now() - start) / 1000;      
+        if (elapsed >= minWaitTime) {      
+          await handleAdCompletion(adId);      
+          setAds((prev) => prev.map((a) => (a.id === adId ? { ...a, watched: a.watched + 1 } : a)));      
+          setLastWatched((prev) => ({ ...prev, [ad.provider]: now }));      
+        } else {      
+          throw new Error(`Please watch the ad completely (minimum ${minWaitTime} seconds)`);      
+        }      
+      }      
+    } catch (e) {      
+      console.error('Ad error:', e);      
+      showMessage('error', 'Ad was not completed.');      
+    } finally {      
+      // Only release lock for non-callback providers      
+      if (ad?.provider !== 'adextra' && ad?.provider !== 'onclicka') {      
+        concurrencyLockRef.current = false;      
+        setConcurrentLock(false);      
+        setIsWatchingAd(null);      
+      }      
     }
   };
 
@@ -3178,60 +3201,60 @@ const AdsDashboard: React.FC<{ userData?: UserData | null }> = ({ userData }) =>
         </div>
       )}
 
-      <div className="col-span-2 rounded-xl p-3 border border-white/10 shadow-xl bg-neutral-950/40 backdrop-blur-sm">
-        <div className="flex justify-between items-center text-sm">
-          <span className="text-neutral-400">Daily reset in:</span>
-          <span className="text-neutral-100 font-semibold tabular-nums">{timeUntilReset}</span>
-          <span className="text-neutral-500">Reset: 6 AM (BD Time)</span>
-        </div>
-      </div>
-
-      {ads.map((ad) => (
-        <div
-          key={ad.id}
-          className="rounded-xl p-3 border border-white/10 shadow-[0_10px_25px_-12px_rgba(0,0,0,0.7)] bg-neutral-950/50 backdrop-blur-sm hover:border-white/20 transition-colors"
-        >
-          <div className="flex items-start gap-3 mb-3">
-            <div className="p-3 rounded-2xl shadow-inner bg-gradient-to-tr from-neutral-800 via-neutral-700 to-neutral-600 ring-1 ring-white/10 flex items-center justify-center">
-              <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z" />
-              </svg>
-            </div>
-            <div className="min-w-0">
-              <h3 className="font-semibold text-white text-base leading-tight truncate">
-                {ad.title}
-              </h3>
-              <p className="text-[12px] text-neutral-400 mt-1 line-clamp-2">
-                {ad.description}
-              </p>
-            </div>
-          </div>
-
-          <div className="w-full bg-neutral-800/40 rounded-full h-3 mb-3 overflow-hidden ring-1 ring-white/10">
-            <div
-              className="h-3 rounded-full transition-all duration-500 bg-gradient-to-r from-neutral-300 to-neutral-500 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5)]"
-              style={{ width: `${Math.min((ad.watched / ad.dailyLimit) * 100, 100)}%` }}
-            />
-          </div>
-
-          <div className="flex justify-between text-[13px] text-neutral-400 font-medium mb-4">
-            <span className="tabular-nums">
-              {ad.watched} / {ad.dailyLimit} watched
-            </span>
-            <span className="text-neutral-300 tabular-nums">wait: {ad.waitTime}s</span>
-          </div>
-
-          <div className="flex justify-center">
-            <button
-              className="w-11/12 py-2 rounded-xl text-sm font-semibold shadow-xl transition-all duration-300 transform ring-1 ring-black/10 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-b from-white to-neutral-200 text-neutral-900 hover:from-white hover:to-white"
-              onClick={() => showAd(ad.id)}
-              disabled={isAdDisabled(ad) || isWatchingAd === ad.id}
-            >
-              {isWatchingAd === ad.id ? 'Watching Ad…' : getButtonText(ad)}
-            </button>
-          </div>
-        </div>
-      ))}
+      <div className="col-span-2 rounded-xl p-3 border border-white/10 shadow-xl bg-neutral-950/40 backdrop-blur-sm">      
+        <div className="flex justify-between items-center text-sm">      
+          <span className="text-neutral-400">Daily reset in:</span>      
+          <span className="text-neutral-100 font-semibold tabular-nums">{timeUntilReset}</span>      
+          <span className="text-neutral-500">Reset: 6 AM (BD Time)</span>      
+        </div>      
+      </div>      
+  
+      {ads.map((ad) => (      
+        <div      
+          key={ad.id}      
+          className="rounded-xl p-3 border border-white/10 shadow-[0_10px_25px_-12px_rgba(0,0,0,0.7)] bg-neutral-950/50 backdrop-blur-sm hover:border-white/20 transition-colors"      
+        >      
+          <div className="flex items-start gap-3 mb-3">      
+            <div className="p-3 rounded-2xl shadow-inner bg-gradient-to-tr from-neutral-800 via-neutral-700 to-neutral-600 ring-1 ring-white/10 flex items-center justify-center">      
+              <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">      
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z" />      
+              </svg>      
+            </div>      
+            <div className="min-w-0">      
+              <h3 className="font-semibold text-white text-base leading-tight truncate">      
+                {ad.title}      
+              </h3>      
+              <p className="text-[12px] text-neutral-400 mt-1 line-clamp-2">      
+                {ad.description}      
+              </p>      
+            </div>      
+          </div>      
+  
+          <div className="w-full bg-neutral-800/40 rounded-full h-3 mb-3 overflow-hidden ring-1 ring-white/10">      
+            <div      
+              className="h-3 rounded-full transition-all duration-500 bg-gradient-to-r from-neutral-300 to-neutral-500 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.5)]"      
+              style={{ width: `${Math.min((ad.watched / ad.dailyLimit) * 100, 100)}%` }}      
+            />      
+          </div>      
+  
+          <div className="flex justify-between text-[13px] text-neutral-400 font-medium mb-4">      
+            <span className="tabular-nums">      
+              {ad.watched} / {ad.dailyLimit} watched      
+            </span>      
+            <span className="text-neutral-300 tabular-nums">wait: {ad.waitTime}s</span>      
+          </div>      
+  
+          <div className="flex justify-center">      
+            <button      
+              className="w-11/12 py-2 rounded-xl text-sm font-semibold shadow-xl transition-all duration-300 transform ring-1 ring-black/10 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-b from-white to-neutral-200 text-neutral-900 hover:from-white hover:to-white"      
+              onClick={() => showAd(ad.id)}      
+              disabled={isAdDisabled(ad) || isWatchingAd === ad.id}      
+            >      
+              {isWatchingAd === ad.id ? 'Watching Ad…' : getButtonText(ad)}      
+            </button>      
+          </div>      
+        </div>      
+      ))}      
     </div>
   );
 };
